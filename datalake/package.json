@@ -1,0 +1,23 @@
+{
+  "name": "datalake",
+  "version": "1.0.0",
+  "description": "data lake redis lib",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "async": "^2.5.0",
+    "async-if-else": "^1.1.1",
+    "bytebuffer": "^5.0.1",
+    "datalake": "file:local_modules/datalake",
+    "hapi": "^16.6.0",
+    "node-uuid": "^1.4.8",
+    "promise": "^8.0.1",
+    "redis": "^2.8.0",
+    "traverse": "^0.6.6",
+    "underscore": "^1.8.3"
+  }
+}
