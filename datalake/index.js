@@ -61,7 +61,7 @@ module.exports = class datalake {
                         }
                         retJSON.Status = 'true';
                         retJSON.Message = 'Success';
-                        retJSON = res.toString().replace(/TpSchemaSet:/g, "").
+                        retJSON.items = res.toString().replace(/TpSchemaSet:/g, "").
                             split(',');
                         return resolve(retJSON);
                     });
@@ -1683,7 +1683,7 @@ module.exports = class datalake {
                     console.log({ details: "RollbackTidalPoolData, snapShotTPData Error", error: err });
                     return callback(err);
                 }
-                return callback(null, VESShortCode, Guid, Tag, Comment, Action, RollbackVersion);
+                return callback(null, VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self);
             });
         } catch (error) {
             console.log({ details: "RollbackTidalPoolData,snapShotTPData Exception", error: error });
