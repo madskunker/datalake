@@ -12,7 +12,6 @@
     "async": "^2.5.0",
     "async-if-else": "^1.1.1",
     "bytebuffer": "^5.0.1",
-    "hapi": "^16.6.0",
     "node-uuid": "^1.4.8",
     "promise": "^8.0.1",
     "redis": "^2.8.0",
