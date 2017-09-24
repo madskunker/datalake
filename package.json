@@ -1,13 +1,19 @@
 {
   "name": "datalake",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "data lake redis lib",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "keywords": [
+    "datalake", "skunkworxlab", "RedisDataInsert"
+  ],
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madskunker/datalake"
+  },
   "dependencies": {
     "async": "^2.5.0",
     "async-if-else": "^1.1.1",
