@@ -441,8 +441,8 @@ Post Data:
 ```json
 {
     "Schema": "Test",
-    "PropertyField": "FirstName",
-    "PropertyValue": "Aswin"
+    "PropertyField": ["FirstName"],
+    "PropertyValue": ["Aswin"]
 }
 ```
 
