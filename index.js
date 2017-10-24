@@ -1495,7 +1495,8 @@ module.exports = class datalake {
                     }
                 ], function (err) {
                     if (err) {
-                        return callback(err);
+                        console.log(err);
+                        return callback(null);
                     }
                     return callback(null);
                 });
@@ -2368,13 +2369,17 @@ module.exports = class datalake {
                 const Schema = (payload.Schema.indexOf(',') > -1) ? payload.Schema.split(',') : [payload.Schema];
                 const Keyword = payload.Keyword ? payload.Keyword : 'Label';
                 const Guid = payload.Guid ? payload.Guid : null;
-                const PropertyField = payload.PropertyField ? payload.PropertyField : null;
+                const PropertyFields = payload.PropertyField ? payload.PropertyField : null;
                 const PropertyValue = payload.PropertyValue ? payload.PropertyValue : null;
                 var newPayload = {
                     VESShortCode: Schema,
-                    Keyword: Keyword,
-                    [PropertyField]: PropertyValue
+                    Keyword: Keyword
                 };
+                for (var PropertyField in PropertyFields) {
+                    if (PropertyFields[PropertyField]) {
+                        newPayload[PropertyFields[PropertyField]] = PropertyValue[PropertyField];
+                    }
+                }
                 var forDeletion = ['Schema', 'Keyword', 'Guid'];
                 var arr = Object.keys(payload).filter((item) => !forDeletion.includes(item));
                 var resultArray = [];
