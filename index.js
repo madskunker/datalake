@@ -2369,8 +2369,18 @@ module.exports = class datalake {
                 const Schema = (payload.Schema.indexOf(',') > -1) ? payload.Schema.split(',') : [payload.Schema];
                 const Keyword = payload.Keyword ? payload.Keyword : 'Label';
                 const Guid = payload.Guid ? payload.Guid : null;
-                const PropertyFields = payload.PropertyField ? payload.PropertyField : null;
-                const PropertyValue = payload.PropertyValue ? payload.PropertyValue : null;
+                let PropertyFields = [];
+                let PropertyValue = [];
+                if (payload.PropertyField) {
+                    PropertyFields = Array.isArray(payload.PropertyField) ? payload.PropertyField : [payload.PropertyField];
+                } else {
+                    PropertyFields = null;
+                }
+                if (payload.PropertyValue) {
+                    PropertyValue = Array.isArray(payload.PropertyValue) ? payload.PropertyValue : [payload.PropertyValue];
+                } else {
+                    PropertyValue = null;
+                }
                 var newPayload = {
                     VESShortCode: Schema,
                     Keyword: Keyword

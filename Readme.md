@@ -1,5 +1,7 @@
 # **Redis Data Lake**
 
+## Use Redis as a document database with extensive search capabilities
+
 ## **Installation**
 
 ### USING NPM
