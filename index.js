@@ -18,42 +18,39 @@ module.exports = class datalake {
     constructor() {
         this.RedisConnected = false;
     }
-    createConnection(ConnectionObj) {
-        var self = this;
-        self.ConnectionObj = ConnectionObj;
-        return new Promise(function (resolve, reject) {
+    CreateConnection(ConnectionObj) {
+        return new Promise((resolve, reject) => {
             let client = {};
 
             if (!ConnectionObj) {
                 return reject({ Status: false, Message: 'No Connection Object Found' });
             }
             client = redis.createClient(ConnectionObj);
-            client.on('connect', function () {
+            client.on('connect', () => {
                 console.log("redis Connected");
 
-                client.select(ConnectionObj.dbname, function () {
+                client.select(ConnectionObj.dbname, () => {
                     console.log("Redis db " + ConnectionObj.dbname + " selected");
                     redisClient = client;
-                    self.RedisConnected = true;
+                    this.RedisConnected = true;
                     return resolve();
                 });
             });
-            client.on('error', function (err) {
+            client.on('error', (err) => {
                 return reject(err);
             });
         });
     }
-    closeConnection() {
+    CloseConnection() {
         redisClient.quit();
         this.RedisConnected = false;
     }
-    GetSchemaList() {
-        var self = this;
+    ListSchemas() {
         return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                if (self.RedisConnected) {
-                    redisClient.keys("TpSchemaSet:*", function (err, res) {
+                if (this.RedisConnected) {
+                    redisClient.keys("Master:*", (err, res) => {
                         if (err) {
                             retJSON.Status = 'false';
                             retJSON.Message = err;
@@ -61,7 +58,7 @@ module.exports = class datalake {
                         }
                         retJSON.Status = 'true';
                         retJSON.Message = 'Success';
-                        retJSON.items = res.toString().replace(/TpSchemaSet:/g, "").
+                        retJSON.items = res.toString().replace(/Master:/g, "").
                             split(',');
                         return resolve(retJSON);
                     });
@@ -73,17 +70,16 @@ module.exports = class datalake {
             } catch (error) {
                 retJSON.Status = "false";
                 retJSON.Message = error;
-                console.log({ details: "getSchemaList exception", error: error });
+                console.log({ details: "ListSchemas exception", error: error });
                 return reject(retJSON);
             }
         });
     }
-    SetKeyData(postData) {
-        var self = this;
+    SetCacheData(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                if (self.RedisConnected) {
+                if (this.RedisConnected) {
                     var Schema = postData ? postData.Schema : '';
                     var Key = postData ? postData.Key : '';
                     var Data = postData ? postData.Data.toString().trim() : '';
@@ -103,14 +99,13 @@ module.exports = class datalake {
             }
         });
     }
-    GetKeyData(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    GetCacheData(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
                 var Hash = postData ? postData.Schema : '';
-                if (self.RedisConnected) {
-                    redisClient.hgetall(Hash, function (err, response) {
+                if (this.RedisConnected) {
+                    redisClient.hgetall(Hash, (err, response) => {
                         if (err) {
                             retJSON.Status = 'false';
                             retJSON.Message = err;
@@ -136,10 +131,9 @@ module.exports = class datalake {
             }
         });
     }
-    showStatus() {
-        var self = this;
-        return new Promise(function (resolve, reject) {
-            if (self.RedisConnected) {
+    ShowConnectionStatus() {
+        return new Promise((resolve, reject) => {
+            if (this.RedisConnected) {
                 return resolve({
                     Status: 'TP Redis Module Loaded and Ready to Rock and Roll...',
                     Message: 'DataLake - Licensed by SkunkworxLab, LLC.'
@@ -147,27 +141,19 @@ module.exports = class datalake {
             }
             return reject({
                 Status: false,
-                Message: 'DataLake - Licensed by SkunkworxLab, LLC.'
+                Message: 'Redis not Connected'
             });
         });
     }
 
-    /**
-     * CreateTPGuid is to Create Guid for insert Record
-     * @return GUID
-     * @function CreateTPGUID
-     * @param {any} VESShortCode 
-     * @param {any} Guid 
-     * @param {any} callback 
-     */
     CreateTPGUID(VESShortCode, Guid, callback) {
-        var self = this;
         var myUUID = Guid ? Guid : uuid.v4();
         try {
-            if (self.RedisConnected) {
-                redisClient.sadd('TpSchemaSet:' + VESShortCode, myUUID);
+            if (this.RedisConnected) {
+                redisClient.sadd('Master:' + VESShortCode, myUUID);
             } else {
                 console.log({ details: 'CreateTPGUID', error: 'Redis connection problem' });
+                return callback({error: 'Redis connection problem' });
             }
             return callback(null, myUUID);
         } catch (err) {
@@ -176,12 +162,6 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-      * This function is to be called to parse the JSON.
-      * @returns {JSON} parsed JSON is returned
-      * @function getPayloadData
-      * @param {ServerObject} request - Incoming server request object
-      */
     getPayloadData(request) {
         try {
             var payloadStr = request;
@@ -203,28 +183,20 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-      * This function is to be called to run the insert TidalPool Schema request.
-      * @returns {string} TidalPool Schema GUID is returned
-      * @function InsertTidalPoolSchema
-      * @param {ServerObject} request - Incoming server request object
-      * @param {ServerObject} reply - Outgoing server reply object
-      */
-    InsertTidalPoolSchema(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    CreateSchema(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload.VESShortCode) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
                 }
 
-                self.CreateTPGUID(payload.VESShortCode, payload.Guid ? payload.Guid : null, function (err, Guid) {
+                this.CreateTPGUID(payload.VESShortCode, payload.Guid ? payload.Guid : null, (err, Guid) => {
                     if (err) {
                         console.log('redis not connected');
-                        console.log({ details: "InsertTidalPoolSchema", error: retJSON });
+                        console.log({ details: "CreateSchema", error: retJSON });
                         retJSON.Status = "false";
                         retJSON.Message = "Redis connection problem";
                         retJSON.insertId = "";
@@ -240,25 +212,16 @@ module.exports = class datalake {
                 retJSON.Status = "false";
                 retJSON.Message = err;
                 retJSON.insertId = "";
-                console.log({ details: "InsertTidalPoolSchema exception", error: err });
+                console.log({ details: "CreateSchema exception", error: err });
                 return resolve(retJSON);
             }
         });
     }
 
-    /**
-     * This function will hset TpSearchHash
-     * @function SetupTPSearchHash
-     * @returns {undefined} Nothing is Returned
-     * @param  {String} VESShortCode - VESShortCode
-     * @param  {String} Keyword - Keyword
-     * @param  {String} ShortCodes - ShortCodes
-     */
-    SetupTPSearchHash(VESShortCode, Keyword, ShortCodes) {
-        var self = this;
+    SetupSearchHash(VESShortCode, Keyword, ShortCodes) {
         try {
-            if (self.RedisConnected) {
-                redisClient.hset("TpSearchHash:" + VESShortCode, Keyword, ShortCodes);
+            if (this.RedisConnected) {
+                redisClient.hset("Index:" + VESShortCode, Keyword, ShortCodes);
             } else {
                 console.log({ details: "SetupTPSearchHash", error: "Redis connection problem" });
             }
@@ -267,68 +230,49 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-      * This function is to be called to Setup Search Hash.
-      * @returns {undefined} Nothing is returned
-      * @function SetupSearchHash
-      * @param {ServerObject} request - Incoming server request object
-      * @param {ServerObject} reply - Outgoing server reply object
-      */
-    SetupSearchHash(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    ConfigureSearchIndex(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload.ShortCodes) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
                 }
 
-                if (self.RedisConnected) {
+                if (this.RedisConnected) {
                     var ShortCodes = (typeof (payload.ShortCodes) == "string") ? payload.ShortCodes : JSON.stringify(payload.ShortCodes);
-                    self.SetupTPSearchHash(payload.VESShortCode, payload.Keyword, ShortCodes);
+                    this.SetupSearchHash(payload.VESShortCode, payload.Keyword, ShortCodes);
                     retJSON.Status = "true";
                     retJSON.Message = "Success";
                 } else {
                     retJSON.Status = "false";
                     retJSON.Message = "Redis connection problem";
-                    console.log({ details: "SetupSearchHash", error: retJSON });
+                    console.log({ details: "ConfigureSearchIndex", error: retJSON });
                 }
                 return resolve(retJSON);
             } catch (err) {
                 retJSON.Status = "false";
                 retJSON.Message = err;
-                console.log({ details: "SetupSearchHash exception", error: err });
+                console.log({ details: "ConfigureSearchIndex exception", error: err });
                 return resolve(retJSON);
             }
         });
     }
 
-    /** 
-     * This function is to be called to add the data to redis.
-     * @returns {undefined} Nothing is returned
-     * @function addRedisData
-     * @param {string} type - type
-     * @param {string} VESShortCode - VESShortCode
-     * @param {string} Keyword - Keyword
-     * @param {string} ShortCode - ShortCode
-     * @param {string} Value - Value
-     * @param {string} Guid - Guid
-     */
     addRedisData(type, VESShortCode, Keyword, ShortCode, Value, Guid) {
         try {
             if (type == "string") {
-                redisClient.sadd("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
+                redisClient.sadd("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
             } else if (type == "integer" && !(isNaN(Value))) {
-                redisClient.zadd("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Value, Guid);
+                redisClient.zadd("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Value, Guid);
             } else if (type == "date") {
                 var dateValue = new Date(Value);
                 dateValue = dateValue.toLocaleString();
                 dateValue = dateValue.replace(/[^\w\s]/g, '').replace(/ /g, '').
                     replace(/AM/g, '000');
                 if (!(isNaN(dateValue))) {
-                    redisClient.zadd("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode, dateValue, Guid);
+                    redisClient.zadd("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, dateValue, Guid);
                 }
             }
         } catch (err) {
@@ -337,19 +281,8 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-      * This function is to be called to process the MetaData.
-      * @returns {undefined} Nothing is returned
-      * @function processMetaData
-      * @param {string} VESShortCode - VESShortCode
-      * @param {string} Keyword - Keyword
-      * @param {string} Guid - Guid
-      * @param {JSON} searchHash - searchHash
-      * @param {JSON} MetaData - MetaData
-      * @param {JSON} oldMetaData - oldMetaData
-      */
     processMetaData(VESShortCode, Keyword, Guid, searchHash, MetaData, oldMetaData) {
-        var self = this;
+        const self = this;
         try {
             for (var HashInfo of searchHash) {
                 if (HashInfo && HashInfo.sc) {
@@ -362,9 +295,9 @@ module.exports = class datalake {
                                     if (this.key != "undefined" && this.key == ShortCode) {
                                         if (Value.trim() != OldValue.trim()) {
                                             if (type == "string") {
-                                                redisClient.srem("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
+                                                redisClient.srem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
                                             } else if (type == "integer" || type == "date") {
-                                                redisClient.zrem("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                                redisClient.zrem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
                                             }
                                             self.addRedisData(type, VESShortCode, Keyword, ShortCode, Value.trim(), Guid);
                                         }
@@ -380,12 +313,12 @@ module.exports = class datalake {
                         }
                     });
                     if (oldMetaData) {
-                        traverse(oldMetaData).forEach(function (OldValue) {
+                        traverse(oldMetaData).forEach((OldValue) => {
                             if (this.key != "undefined" && this.key == ShortCode) {
                                 if (type == "string") {
-                                    redisClient.srem("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
+                                    redisClient.srem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
                                 } else if (type == "integer" || type == "date") {
-                                    redisClient.zrem("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                    redisClient.zrem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
                                 }
                             }
                         });
@@ -398,20 +331,8 @@ module.exports = class datalake {
         }
     }
 
-    /**
-     * This function is to be called to insert Search Sets.
-     * @returns {undefined} Nothing is returned
-     * @function populateTPSearchSet
-     * @param  {String} _VESShortCode - _VESShortCode
-     * @param  {GUID} _Guid - _Guid
-     * @param  {String} _Keyword - _Keyword
-     * @param  {Object} _MetaData - _MetaData
-     * @param  {String} Type - Type
-     * @param  {function} callback - callback function
-     */
-    populateTPSearchSet(_VESShortCode, _Guid, _Keyword, _MetaData, Type, callback) {
+    populateSearchIndex(_VESShortCode, _Guid, _Keyword, _MetaData, Type, callback) {
         try {
-            var self = this;
             var Guid = "", VESShortCode = "", Keyword = "", MetaData = {};
             var missingMandatoryKeys = "";
             if (_Guid) {
@@ -436,16 +357,16 @@ module.exports = class datalake {
             }
 
             if (missingMandatoryKeys != "") {
-                console.log({ details: "populateTPSearchSet missingMandatoryKeys", error: missingMandatoryKeys });
+                console.log({ details: "populateSearchIndex missingMandatoryKeys", error: missingMandatoryKeys });
                 return callback("missingMandatoryKeys : " + missingMandatoryKeys);
             }
 
-            if (self.RedisConnected) {
+            if (this.RedisConnected) {
                 async.waterfall([
-                    function (callback) {
-                        redisClient.sismember("TpSchemaSet:" + VESShortCode, Guid, function (err, res) {
+                    (callback) => {
+                        redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
                             if (err) {
-                                console.log({ details: "populateTPSearchSet sismember", error: err });
+                                console.log({ details: "populateSearchIndex sismember", error: err });
                                 return callback(err);
                             }
                             if (res) {
@@ -454,76 +375,76 @@ module.exports = class datalake {
                             return callback('Posted Guid not found in TpSchemaSet/' + VESShortCode);
                         });
                     },
-                    function (callback) {
-                        redisClient.hget("TpSearchHash:" + VESShortCode, Keyword, function (err, res) {
+                    (callback) => {
+                        redisClient.hget("Index:" + VESShortCode, Keyword, (err, res) => {
                             var response = '';
                             if (err) {
-                                console.log({ details: "populateTPSearchSet hget", error: err });
+                                console.log({ details: "populateSearchIndex hget", error: err });
                                 return callback(err);
                             }
                             try {
                                 response = (typeof (res) == "string") ? JSON.parse(res) : res;
                             } catch (exp) {
-                                console.log({ details: "populateTPSearchSet response parse : ", error: exp });
+                                console.log({ details: "populateSearchIndex response parse : ", error: exp });
                                 return callback(exp);
                             }
                             return callback(null, response);
                         });
                     },
-                    function (searchHash, callback) {
+                    (searchHash, callback) => {
                         if (Type && Type == "Refresh") {
                             try {
                                 MetaData = (typeof (MetaData) == "string") ? JSON.parse(MetaData) : MetaData;
                             } catch (err) {
-                                console.log({ details: "populateTPSearchSet parse MetaData", error: err });
+                                console.log({ details: "populateSearchIndex parse MetaData", error: err });
                                 return callback(err);
                             }
                             if (searchHash) {
-                                self.processMetaData(VESShortCode, Keyword, Guid, searchHash, MetaData, null);
+                                this.processMetaData(VESShortCode, Keyword, Guid, searchHash, MetaData, null);
                             }
                             return callback(null);
                         } else { //eslint-disable-line
                             var oldMetaData = "";
-                            redisClient.hget("TpData:" + VESShortCode + ":" + Guid, Keyword, function (err, res) {
+                            redisClient.hget("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
                                 if (err) {
-                                    console.log({ details: "populateTPSearchSet hget", error: err });
+                                    console.log({ details: "populateSearchIndex hget", error: err });
                                     return callback(err);
                                 }
-                                redisClient.hset("TpData:" + VESShortCode + ":" + Guid, Keyword, MetaData);
+                                redisClient.hset("Data:" + VESShortCode + ":" + Guid, Keyword, MetaData);
                                 try {
                                     MetaData = (typeof (MetaData) == "string") ? JSON.parse(MetaData) : MetaData;
                                 } catch (exp) {
-                                    console.log({ details: "populateTPSearchSet parse MetaData", error: exp });
+                                    console.log({ details: "populateSearchIndex parse MetaData", error: exp });
                                     return callback(exp);
                                 }
                                 if (res) {
                                     try {
                                         oldMetaData = (typeof (res) == "string") ? JSON.parse(res) : res;
                                     } catch (exp) {
-                                        console.log({ details: "populateTPSearchSet parse oldMetaData", error: exp });
+                                        console.log({ details: "populateSearchIndex parse oldMetaData", error: exp });
                                         return callback(exp);
                                     }
                                 }
                                 if (searchHash) {
-                                    self.processMetaData(VESShortCode, Keyword, Guid, searchHash, MetaData, oldMetaData);
+                                    this.processMetaData(VESShortCode, Keyword, Guid, searchHash, MetaData, oldMetaData);
                                 }
                                 return callback(null);
                             });
                         }
                     }
-                ], function (err) {
+                ], (err) => {
                     if (err) {
-                        console.log({ details: "populateTPSearchSet waterfall", error: err });
+                        console.log({ details: "populateSearchIndex waterfall", error: err });
                         return callback(err);
                     }
                     return callback(null);
                 });
             } else {
-                console.log({ details: "populateTPSearchSet", error: "Redis connection problem" });
+                console.log({ details: "populateSearchIndex", error: "Redis connection problem" });
                 return callback("Redis connection problem");
             }
         } catch (err) {
-            console.log({ details: "populateTPSearchSet exception", error: err });
+            console.log({ details: "populateSearchIndex exception", error: err });
             return callback(err);
         }
     }
@@ -531,10 +452,9 @@ module.exports = class datalake {
 
     dataInsert(VESShortCode, Guid, Keyword, MetaData, Tag, Comment, Action, retJSON, callback) {
         try {
-            var self = this;
-            self.getHash('TpData:' + VESShortCode + ':' + Guid, Keyword, function (err, response) {
+            this.getHash('Data:' + VESShortCode + ':' + Guid, Keyword, (err, response) => {
                 if (err == 'Hash Key not found in Redis') {
-                    self.populateTPSearchSet(VESShortCode, Guid, Keyword, MetaData, null, function (err) {
+                    this.populateSearchIndex(VESShortCode, Guid, Keyword, MetaData, null, (err) => {
                         if (err) {
                             retJSON.Status = "false";
                             retJSON.Message = err;
@@ -547,13 +467,13 @@ module.exports = class datalake {
                     });
                 }
                 if (response) {
-                    self.snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, function (err, res) {
+                    this.snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, (err, res) => {
                         if (err) {
                             retJSON.Status = "false";
                             retJSON.Message = err;
                             return callback(null, retJSON);
                         }
-                        self.populateTPSearchSet(VESShortCode, Guid, Keyword, MetaData, null, function (err) {
+                        this.populateSearchIndex(VESShortCode, Guid, Keyword, MetaData, null, (err) => {
                             if (err) {
                                 retJSON.Status = "false";
                                 retJSON.Message = err;
@@ -573,103 +493,10 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-      * This function is to be called to insert TidalPool data and Search Sets.
-      * @returns {undefined} Nothing is returned
-      * @function InsertTPData
-      * @param {ServerObject} request - Incoming server request object
-      * @param {ServerObject} reply - Outgoing server reply object
-      */
-    InsertTPData(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
-            var retJSON = {};
-            try {
-                var payload = self.getPayloadData(postData);
-
-                if (!payload) {
-                    return reject({ Status: false, Message: 'Invalid Postdata' });
-                }
-
-                var newMetaData = "";
-                if (payload.Certificate) {
-                    var certificate = payload.Certificate;
-                    try {
-                        var certStr = ByteBuffer.atob(certificate.replace("BEGIN CERTIFICATE--- ", "").replace(" ---END CERTIFICATE", ""));
-                        newMetaData = certStr;
-                    } catch (err) {
-                        console.log(err);
-                        console.log({ details: "InsertTPData atob certificate exception", error: err });
-                        return reject({ Status: false, Message: 'Invalid certificate Postdata' });
-                    }
-                }
-
-                var Guid = "", VESShortCode = "", Keyword = "", MetaData = {}, Tag = '', Comment = '', Action = 'Update';
-                var missingMandatoryKeys = "";
-                if (payload.Guid) {
-                    Guid = payload.Guid.toString().trim();
-                } else {
-                    missingMandatoryKeys = "Guid";
-                }
-                if (payload.VESShortCode) {
-                    VESShortCode = payload.VESShortCode.toString().trim();
-                } else {
-                    missingMandatoryKeys = (missingMandatoryKeys == "" ? "VESShortCode" : missingMandatoryKeys + ", VESShortCode");
-                }
-                if (payload.Keyword) {
-                    Keyword = payload.Keyword.toString().trim();
-                } else {
-                    missingMandatoryKeys = (missingMandatoryKeys == "" ? "Keyword" : missingMandatoryKeys + ", Keyword");
-                }
-                if (payload.MetaData) {
-                    MetaData = payload.MetaData.toString().trim();
-                } else {
-                    missingMandatoryKeys = (missingMandatoryKeys == "" ? "MetaData" : missingMandatoryKeys + ", MetaData");
-                }
-
-                if (newMetaData) {
-                    console.log("Got A Certificate MetaData");
-                    MetaData = newMetaData;
-                    // Add Logic to replace MetaData with newMetaData if it exists
-                }
-                if (missingMandatoryKeys != "") {
-                    retJSON.Status = "false";
-                    retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "InsertTPData missingMandatoryKeys", error: missingMandatoryKeys });
-                    return resolve(retJSON);
-                }
-
-                self.dataInsert(VESShortCode, Guid, Keyword, MetaData, Tag, Comment, Action, retJSON, function (err, result) {
-                    if (err) {
-                        console.log(err);
-                        return reject(err);
-                    }
-                    console.log(result);
-                    return resolve(result);
-                });
-
-            } catch (err) {
-                retJSON.Status = "false";
-                retJSON.Message = err;
-                console.log({ details: "InsertTPData exception", error: err });
-                return resolve(retJSON);
-            }
-        });
-    }
-
-    /** 
-     * This function is to be called to get the Result from redis hash value
-     * @returns {JSON} JSON is returned
-     * @function getHash
-     * @param {string} Hash - Hash
-     * @param {string} Key - Key
-     * @param {function} callback - It is a callback function
-     */
     getHash(Hash, Key, callback) {
-        var self = this;
         try {
-            if (self.RedisConnected) {
-                redisClient.hget(Hash, Key, function (err, res) {
+            if (this.RedisConnected) {
+                redisClient.hget(Hash, Key, (err, res) => {
                     if (err) {
                         return callback(err);
                     }
@@ -700,25 +527,15 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-     * This function is to be called to get the Result from redis
-     * @returns {List} GuidList is returned
-     * @function getResult
-     * @param {List} SearchListString - SearchListString
-     * @param {List} SearchLOVString - SearchLOVString
-     * @param {List} SearchListScore - SearchListScore
-     * @param {List} SearchLOVScore - SearchLOVScore
-     * @param {Object} callback - It is a callback function
-     */
     getResult(SearchListString, SearchLOVString, SearchListScore, SearchLOVScore, callback) {
         try {
             var GuidList = [];
             var hit1 = false;
             var hit2 = false;
             async.parallel([
-                function (callback) {
+                (callback) => {
                     if (SearchListString && SearchListString.length > 0) {
-                        redisClient.sinter(SearchListString, function (err, res) {
+                        redisClient.sinter(SearchListString, (err, res) => {
                             hit1 = true;
                             if (err) {
                                 console.log({ details: "sinter Error", error: err });
@@ -733,11 +550,11 @@ module.exports = class datalake {
                         return callback(null);
                     }
                 },
-                function (callback) {
+                (callback) => {
                     var ScoreResult = [];
-                    async.forEachOf(SearchListScore, function (ScoreCommand, i, callback) {
+                    async.forEachOf(SearchListScore, (ScoreCommand, i, callback) => {
                         var searchScoreCommand = ScoreCommand.split(',');
-                        redisClient.zrangebyscore(searchScoreCommand, function (err, res) {
+                        redisClient.zrangebyscore(searchScoreCommand, (err, res) => {
                             hit2 = true;
                             if (err) {
                                 console.log({ details: "zrangebyscore Error", error: err });
@@ -753,7 +570,7 @@ module.exports = class datalake {
                             return callback(null);
                         });
 
-                    }, function (err) {
+                    }, (err) => {
                         if (err) {
                             console.log({ details: "zrangebyscore exception", error: err });
                             return callback(err);
@@ -761,7 +578,7 @@ module.exports = class datalake {
                         return callback(null, ScoreResult);
                     });
                 }
-            ], function (err, results) {
+            ], (err, results) => {
                 if (err) {
                     console.log({ details: "getResult error", error: err });
                     return callback(err);
@@ -784,28 +601,17 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-     * This function is to be called to get the Result from redis
-     * @returns {List} GuidList is returned
-     * @function getResultLOV
-     * @param {List} preGuidList - preGuidList
-     * @param {List} SearchListString - SearchListString
-     * @param {List} SearchLOVString - SearchLOVString
-     * @param {List} SearchListScore - SearchListScore
-     * @param {List} SearchLOVScore - SearchLOVScore
-     * @param {function} callback - It is a callback function
-     */
     getResultLOV(preGuidList, SearchListString, SearchLOVString, SearchListScore, SearchLOVScore, callback) {
         try {
             var GuidList = [];
             var hitfn1 = false;
             var hitfn2 = false;
             async.parallel([
-                function (callback) {
+                (callback) => {
                     // var ScoreLOVResult = [];
-                    async.forEachOf(SearchLOVString, function (command, i, callback) {
+                    async.forEachOf(SearchLOVString, (command, i, callback) => {
                         var searchCommand = command.split(',');
-                        redisClient.sunion(searchCommand, function (err, res) {
+                        redisClient.sunion(searchCommand, (err, res) => {
                             hitfn1 = true;
                             if (err) {
                                 console.log({ details: "sunion Error", error: err });
@@ -820,7 +626,7 @@ module.exports = class datalake {
                             }
                             return callback(null);
                         });
-                    }, function (err) {
+                    }, (err) => {
                         if (err) {
                             console.log({ details: "sunion exception", error: err });
                             return callback(err);
@@ -828,14 +634,14 @@ module.exports = class datalake {
                         return callback(null, GuidList);
                     });
                 },
-                function (callback) {
+                (callback) => {
                     var TotalScoreResult = [];
-                    async.forEachOf(SearchLOVScore, function (ScoreCommandList, i, callback) {
+                    async.forEachOf(SearchLOVScore, (ScoreCommandList, i, callback) => {
                         hitfn2 = true;
                         var ScoreResult = [];
-                        async.forEachOf(ScoreCommandList, function (ScoreCommand, i, cb) {
+                        async.forEachOf(ScoreCommandList, (ScoreCommand, i, cb) => {
                             var ScoreList = ScoreCommand.split(',');
-                            redisClient.zrangebyscore(ScoreList, function (err, res) {
+                            redisClient.zrangebyscore(ScoreList, (err, res) => {
                                 if (err) {
                                     console.log({ details: "zrangebyscore Error", error: err });
                                     return cb(err);
@@ -849,7 +655,7 @@ module.exports = class datalake {
                                 }
                                 return cb(null);
                             });
-                        }, function (err) {
+                        }, (err) => {
                             if (err) {
                                 console.log({ details: "zrangebyscore exception", error: err });
                                 return callback(err);
@@ -861,7 +667,7 @@ module.exports = class datalake {
                             }
                             return callback(null);
                         });
-                    }, function (err) {
+                    }, (err) => {
                         if (err) {
                             console.log({ details: "zrangebyscore exception", error: err });
                             return callback(err);
@@ -869,7 +675,7 @@ module.exports = class datalake {
                         return callback(null, TotalScoreResult);
                     });
                 }
-            ], function (err, results) {
+            ], (err, results) => {
                 if (err) {
                     console.log({ details: "getResult_LOV error", error: err });
                     return callback(err);
@@ -895,22 +701,12 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-     * This function is to be called to get the Result from redis
-     * @returns {JSON} JSON is returned
-     * @function getSearchData
-     * @param {List} GuidList - GuidList
-     * @param {string} VESShortCode - VESShortCode
-     * @param {string} Keyword - Keyword
-     * @param {function} callback - It is a callback function
-     */
     getSearchData(GuidList, VESShortCode, Keyword, callback) {
         try {
-            var self = this;
             var items = [];
-            async.forEachOf(GuidList, function (Guid, i, callback) {
-                var Hash = "TpData:" + VESShortCode + ":" + Guid;
-                self.getHash(Hash, Keyword, function (err, response) {
+            async.forEachOf(GuidList, (Guid, i, callback) => {
+                var Hash = "Data:" + VESShortCode + ":" + Guid;
+                this.getHash(Hash, Keyword, (err, response) => {
                     if (err) {
                         console.log({ details: "getSearchData Error", error: err });
                         return callback(err);
@@ -920,7 +716,7 @@ module.exports = class datalake {
                     return callback(null);
                 });
 
-            }, function (err) {
+            }, (err) => {
                 if (err) {
                     console.log({ details: "getSearchData exception", error: err });
                     return callback(err);
@@ -933,38 +729,27 @@ module.exports = class datalake {
         }
     }
 
-    /**
-      * This function is to be called to Search the tidal pool Hash.
-      * @returns {Object} List of Values avalilable
-      * @function SearchTPHash
-      * @param  {String} VESShortCode - VESShortCode
-      * @param  {String} Keyword - Keyword
-      * @param  {Object} payload - payload
-      * @param {Array} resultArray - resultArray
-      * @param  {function} callback - callback
-      */
     SearchTPHash(VESShortCode, Keyword, payload, resultArray, callback) {
         try {
-            var self = this;
             var keys = Object.keys(payload);
             var SearchListString = [];
             var SearchListScore = [];
             var SearchLOVString = [];
             var SearchLOVScore = [];
             async.waterfall([
-                function (callback) {
+                (callback) => {
                     if (Keyword) {
-                        self.getHash("TpSearchHash:" + VESShortCode, Keyword, callback);
+                        this.getHash("Index:" + VESShortCode, Keyword, callback);
                     } else {
                         return callback('Keyword is missing..');
                     }
                 },
-                function (TpSearchHash, callback) {
+                (TpSearchHash, callback) => {
                     var TpSearchHashJson = {};
                     try {
                         TpSearchHashJson = (typeof (TpSearchHash) == "string") ? JSON.parse(TpSearchHash) : TpSearchHash;
                     } catch (err) {
-                        console.log({ details: "SearchTidalPoolHash", error: err });
+                        console.log({ details: "SearchTPHash", error: err });
                         return callback(err);
                     }
 
@@ -982,12 +767,12 @@ module.exports = class datalake {
                                             var LOV = SearchValue.split(',');
                                             var lovKey = '';
                                             for (let j = 0; j < LOV.length; j++) {
-                                                lovKey += "TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + LOV[j].toString().trim() + ',';
+                                                lovKey += "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + LOV[j].toString().trim() + ',';
                                             }
                                             lovKey = lovKey.slice(0, -1);
                                             SearchLOVString.push(lovKey);
                                         } else {
-                                            Search = "TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + SearchValue.trim();
+                                            Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + SearchValue.trim();
                                             SearchListString.push(Search);
                                         }
                                     } else if (type == "integer") {
@@ -995,16 +780,16 @@ module.exports = class datalake {
                                             const LOVScore = SearchValue.split(',');
                                             const LOVScoreInternal = [];
                                             for (let j = 0; j < LOVScore.length; j++) {
-                                                const lovKeyScore = "TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + LOVScore[j].trim() + "," + LOVScore[j].trim();
+                                                const lovKeyScore = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + LOVScore[j].trim() + "," + LOVScore[j].trim();
                                                 LOVScoreInternal.push(lovKeyScore);
                                             }
                                             SearchLOVScore.push(LOVScoreInternal);
                                         } else {
                                             const Values = SearchValue.split('-');
                                             if (Values.length > 1) {
-                                                Search = "TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[1].trim();
+                                                Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[1].trim();
                                             } else {
-                                                Search = "TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[0].trim();
+                                                Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[0].trim();
                                             }
                                             SearchListScore.push(Search);
                                         }
@@ -1013,19 +798,19 @@ module.exports = class datalake {
                                             var LOVScore = SearchValue.split(',');
                                             var LOVScoreInternal = [];
                                             for (var j = 0; j < LOVScore.length; j++) {
-                                                var searchDT = self.formatDate(LOVScore[j]);
-                                                var lovKeyScore = "TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + searchDT.trim() + "," + searchDT.trim();
+                                                var searchDT = this.formatDate(LOVScore[j]);
+                                                var lovKeyScore = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + searchDT.trim() + "," + searchDT.trim();
                                                 LOVScoreInternal.push(lovKeyScore);
                                             }
                                             SearchLOVScore.push(LOVScoreInternal);
                                         } else {
                                             var Values = SearchValue.split('-');
-                                            var fromDate = self.formatDate(Values[0]);
+                                            var fromDate = this.formatDate(Values[0]);
                                             if (Values.length > 1) {
-                                                var toDate = self.formatDate(Values[1]);
-                                                Search = "TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + toDate.trim();
+                                                var toDate = this.formatDate(Values[1]);
+                                                Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + toDate.trim();
                                             } else {
-                                                Search = "TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + fromDate.trim();
+                                                Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + fromDate.trim();
                                             }
                                             SearchListScore.push(Search);
                                         }
@@ -1036,12 +821,12 @@ module.exports = class datalake {
                     }
                     callback(null, SearchListString, SearchLOVString, SearchListScore, SearchLOVScore);
                 },
-                self.getResult,
-                self.getResultLOV,
-                function (GuidList, callback) {
-                    self.getSearchData(GuidList, VESShortCode, Keyword, callback);
+                this.getResult,
+                this.getResultLOV,
+                (GuidList, callback) => {
+                    this.getSearchData(GuidList, VESShortCode, Keyword, callback);
                 }
-            ], function (err, result) {
+            ], (err, result) => {
                 if (err) {
                     return callback(err);
                 }
@@ -1053,25 +838,16 @@ module.exports = class datalake {
                 return callback(null, result);
             });
         } catch (err) {
-            console.log({ details: "SearchTidalPoolHash exception", error: err });
+            console.log({ details: "SearchTPHash exception", error: err });
             return callback(err);
         }
     }
 
-
-    /** 
-      * This function is to be called to Search the tidal pool Hash.
-      * @returns {undefined} Nothing is returned
-      * @function SearchTidalPoolHash
-      * @param {ServerObject} request - Incoming server request object
-      * @param {ServerObject} reply - Outgoing server reply object
-      */
-    SearchTidalPoolHash(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    SearchDataByProperty(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
@@ -1081,7 +857,7 @@ module.exports = class datalake {
                 var Keyword = payload.Keyword;
                 var resultArray = [];
 
-                self.SearchTPHash(VESShortCode, Keyword, payload, resultArray, function (err, result) {
+                this.SearchTPHash(VESShortCode, Keyword, payload, resultArray, (err, result) => {
                     if (err) {
                         retJSON.Status = "false";
                         retJSON.Message = err;
@@ -1096,24 +872,16 @@ module.exports = class datalake {
             } catch (err) {
                 retJSON.Status = "false";
                 retJSON.Message = err;
-                console.log({ details: "SearchTidalPoolHash exception", error: err });
+                console.log({ details: "SearchDataByProperty exception", error: err });
                 return resolve(retJSON);
             }
         });
     }
 
-    /** 
-     * This function is to be called to get all the Result from redis hash values
-     * @returns {JSON} JSON is returned
-     * @function getHashAll
-     * @param {string} Hash - Hash
-     * @param {Object} callback - It is a callback function
-     */
     getHashAll(Hash, callback) {
-        var self = this;
         try {
-            if (self.RedisConnected) {
-                redisClient.hgetall(Hash, function (err, res) {
+            if (this.RedisConnected) {
+                redisClient.hgetall(Hash, (err, res) => {
                     if (err) {
                         return callback(err);
                     }
@@ -1131,20 +899,12 @@ module.exports = class datalake {
         }
     }
 
-    /** 
-     * This function is to be called to get TidalPool Schema.
-     * @returns {JSON} TidalPool Schema JSON is returned
-     * @function GetTidalPoolSchema
-     * @param {ServerObject} request - Incoming server request object
-     * @param {ServerObject} reply - Outgoing server reply object
-     */
-    GetTidalPoolSchema(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    GetAllSchemaData(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             var items = [];
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
@@ -1168,15 +928,15 @@ module.exports = class datalake {
                 if (missingMandatoryKeys != "") {
                     retJSON.Status = "false";
                     retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "GetTidalPoolSchema missingMandatoryKeys", error: missingMandatoryKeys });
+                    console.log({ details: "GetAllSchemaData missingMandatoryKeys", error: missingMandatoryKeys });
                     return resolve(retJSON);
                 }
 
-                if (self.RedisConnected) {
+                if (this.RedisConnected) {
                     async.waterfall([
-                        function (callback) {
+                        (callback) => {
                             if (Guid) {
-                                redisClient.sismember("TpSchemaSet:" + VESShortCode, Guid, function (err, res) {
+                                redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
                                     if (err) {
                                         return callback(err);
                                     }
@@ -1186,7 +946,7 @@ module.exports = class datalake {
                                     return callback('Posted VESShortCode not found in TpSchemaSet');
                                 });
                             } else {
-                                redisClient.smembers("TpSchemaSet:" + VESShortCode, function (err, res) {
+                                redisClient.smembers("Master:" + VESShortCode, (err, res) => {
                                     if (err) {
                                         return callback(err);
                                     }
@@ -1197,12 +957,12 @@ module.exports = class datalake {
                                 });
                             }
                         },
-                        function (GuidList, callback) {
+                        (GuidList, callback) => {
                             if (Keyword) {
-                                async.forEachOf(GuidList, function (Guid, i, callback) {
-                                    self.getHash("TpData:" + VESShortCode + ":" + Guid, Keyword, function (err, res) {
+                                async.forEachOf(GuidList, (Guid, i, callback) => {
+                                    this.getHash("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
                                         if (err) {
-                                            console.log({ details: "GetTidalPoolSchema:getHash:Error", error: err });
+                                            console.log({ details: "GetAllSchemaData:getHash:Error", error: err });
                                         } else {
                                             var retObj = {};
                                             retObj.Guid = Guid;
@@ -1212,18 +972,18 @@ module.exports = class datalake {
                                         }
                                         callback(null);
                                     });
-                                }, function (err) {
+                                }, (err) => {
                                     if (err) {
-                                        console.log({ details: "GetTidalPoolSchema exception", error: err });
+                                        console.log({ details: "GetAllSchemaData exception", error: err });
                                         return callback(err);
                                     }
                                     return callback(null);
                                 });
                             } else {
-                                async.forEachOf(GuidList, function (Guid, i, callback) {
-                                    self.getHashAll("TpData:" + VESShortCode + ":" + Guid, function (err, res) {
+                                async.forEachOf(GuidList, (Guid, i, callback) => {
+                                    this.getHashAll("Data:" + VESShortCode + ":" + Guid, (err, res) => {
                                         if (err) {
-                                            console.log({ details: "GetTidalPoolSchema:getHashAll:Error", error: err });
+                                            console.log({ details: "GetAllSchemaData:getHashAll:Error", error: err });
                                         } else if (res) {
                                             var keys = Object.keys(res);
                                             for (var i = 0; i < keys.length; i++) {
@@ -1239,16 +999,16 @@ module.exports = class datalake {
                                         callback(null);
                                     });
 
-                                }, function (err) {
+                                }, (err) => {
                                     if (err) {
-                                        console.log({ details: "GetTidalPoolSchema exception", error: err });
+                                        console.log({ details: "GetAllSchemaData exception", error: err });
                                         return callback(err);
                                     }
                                     return callback(null);
                                 });
                             }
                         }
-                    ], function (err) {
+                    ], (err) => {
                         if (err) {
                             retJSON.Status = "false";
                             retJSON.Message = err;
@@ -1263,38 +1023,26 @@ module.exports = class datalake {
                 } else {
                     retJSON.Status = "false";
                     retJSON.Message = "Redis connection problem";
-                    console.log({ details: "GetTidalPoolSchema", error: retJSON });
+                    console.log({ details: "GetAllSchemaData", error: retJSON });
                     return resolve(retJSON);
                 }
             } catch (err) {
                 retJSON.Status = "false";
                 retJSON.Message = err;
-                console.log({ details: "GetTidalPoolSchema exception", error: err });
+                console.log({ details: "GetAllSchemaData exception", error: err });
                 return resolve(retJSON);
             }
         });
     }
 
-    /**
-     * This function is to be called to archive the VES Data.
-     * @returns {undefined} Nothing is returned
-     * @function snapShotVESData
-     * @param  {String} VESShortCode - VESShortCode
-     * @param  {GUID} Guid - Guid
-     * @param  {String} Tag - Tag
-     * @param  {String} Comment - Comment
-     * @param  {String} Action - Action
-     * @param  {function} callback - callback
-     */
     snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, callback) {
         try {
-            var self = this;
-            if (self.RedisConnected) {
+            if (this.RedisConnected) {
                 async.waterfall([
-                    function (callback) {
-                        self.getHashAll("TpData:" + VESShortCode + ":" + Guid, function (err, res) {
+                    (callback) => {
+                        this.getHashAll("Data:" + VESShortCode + ":" + Guid, (err, res) => {
                             if (err) {
-                                console.log({ details: "SnapshotTidalPoolData:getHashAll:Error", error: err });
+                                console.log({ details: "snapShotVESData:getHashAll:Error", error: err });
                                 return callback(err);
                             } else if (res) {
                                 res.Tag = Tag;
@@ -1305,10 +1053,10 @@ module.exports = class datalake {
                             return callback('Hash key not found in Redis');
                         });
                     },
-                    function (DataHash, callback) {
-                        redisClient.zrevrangebyscore("TpDataArchive:" + VESShortCode + ":" + Guid, '+inf', '-inf', 'WITHSCORES', 'LIMIT', '0', '1', function (err, res) {
+                    (DataHash, callback) => {
+                        redisClient.zrevrangebyscore("DataArchive:" + VESShortCode + ":" + Guid, '+inf', '-inf', 'WITHSCORES', 'LIMIT', '0', '1', (err, res) => {
                             if (err) {
-                                console.log({ details: "SnapshotTidalPoolData:zrevrangebyscore:Error", error: err });
+                                console.log({ details: "snapShotVESData:zrevrangebyscore:Error", error: err });
                                 return callback(err);
                             } else if (res) {
                                 var Version = "";
@@ -1323,43 +1071,35 @@ module.exports = class datalake {
                             return callback('Hash key not found in Redis');
                         });
                     },
-                    function (Version, InDataHash, callback) {
+                    (Version, InDataHash, callback) => {
                         var DataHash = '';
                         DataHash = (typeof (InDataHash) == "string") ? InDataHash : JSON.stringify(InDataHash);
-                        redisClient.zadd("TpDataArchive:" + VESShortCode + ":" + Guid, Version, DataHash);
+                        redisClient.zadd("DataArchive:" + VESShortCode + ":" + Guid, Version, DataHash);
                         return callback(null, Version);
                     }
-                ], function (err, result) {
+                ], (err, result) => {
                     if (err) {
-                        console.log({ details: "SnapshotTidalPoolData:Error", error: err });
+                        console.log({ details: "snapShotVESData:Error", error: err });
                         return callback(err);
                     }
                     return callback(null, result);
                 });
 
             } else {
-                console.log({ details: "SnapshotTidalPoolData ", error: "Redis connection problem" });
+                console.log({ details: "snapShotVESData ", error: "Redis connection problem" });
                 return callback("Redis connection problem");
             }
         } catch (exp) {
-            console.log({ details: "SnapshotTidalPoolData Exception", error: exp });
+            console.log({ details: "snapShotVESData Exception", error: exp });
             return callback(exp);
         }
     }
 
-    /**
-        * This function is to be called to archive the VES Data.
-        * @returns {undefined} Nothing is returned
-        * @function SnapshotTidalPoolData
-        * @param {ServerObject} request - Incoming server request object
-        * @param {ServerObject} reply - Outgoing server reply object
-        */
-    SnapshotTidalPoolData(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    CreateBackupData(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
@@ -1383,11 +1123,11 @@ module.exports = class datalake {
                 if (missingMandatoryKeys != "") {
                     retJSON.Status = "false";
                     retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "SnapshotTidalPoolData missingMandatoryKeys", error: missingMandatoryKeys });
+                    console.log({ details: "CreateBackupData missingMandatoryKeys", error: missingMandatoryKeys });
                     return resolve(retJSON);
                 }
 
-                self.snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, function (err, res) {
+                this.snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, (err, res) => {
                     if (err) {
                         retJSON.Status = "false";
                         retJSON.Message = err;
@@ -1402,25 +1142,14 @@ module.exports = class datalake {
             } catch (err) {
                 retJSON.Status = "false";
                 retJSON.Message = err;
-                console.log({ details: "SnapshotTidalPoolData exception", error: err });
+                console.log({ details: "CreateBackupData exception", error: err });
                 return resolve(retJSON);
             }
         });
     }
 
-    /**
-     * This function is to be called to remove VES Data.
-     * @returns {undefined} Nothing is returned
-     * @function removeTidalPoolData
-     * @param {string} _VESShortCode - VESShortCode
-     * @param {string} _Guid - Guid
-     * @param {string} _Keyword - Keyword
-     * @param {string} _MetaData - _MetaData
-     * @param {Object} callback - Incoming callback function
-     */
     removeDataHash(_VESShortCode, _Guid, _Keyword, _MetaData, callback) {
         try {
-            var self = this;
             var VESShortCode = "", Guid = "", Keyword = "", MetaData = "";
             var missingMandatoryKeys = "";
             if (_VESShortCode) {
@@ -1445,46 +1174,46 @@ module.exports = class datalake {
             }
 
             if (missingMandatoryKeys != "") {
-                console.log({ details: "removeTidalPoolData missingMandatoryKeys", error: missingMandatoryKeys });
+                console.log({ details: "RemoveData missingMandatoryKeys", error: missingMandatoryKeys });
                 return callback("missingMandatoryKeys : " + missingMandatoryKeys);
             }
-            if (self.RedisConnected) {
+            if (this.RedisConnected) {
                 async.waterfall([
-                    function (callback) {
-                        self.getHash("TpSearchHash:" + VESShortCode, Keyword, function (err, res) {
+                    (callback) => {
+                        this.getHash("Index:" + VESShortCode, Keyword, (err, res) => {
                             if (err) {
-                                console.log({ details: "removeTidalPoolData TpSearchHash getHash", error: err });
+                                console.log({ details: "RemoveData TpSearchHash getHash", error: err });
                                 return callback(err);
                             }
                             var response = '';
                             try {
                                 response = (typeof (res) == "string") ? JSON.parse(res) : res;
                             } catch (exp) {
-                                console.log({ details: "removeTidalPoolData TpSearchHash response parse : ", error: exp });
+                                console.log({ details: "RemoveData TpSearchHash response parse : ", error: exp });
                                 return callback(exp);
                             }
                             return callback(null, response, MetaData);
                         });
                     },
-                    function (InSearchHash, InMetaData, callback) {
+                    (InSearchHash, InMetaData, callback) => {
                         var MetaData = '', searchHash = '';
                         try {
                             MetaData = (typeof (InMetaData) == "string") ? JSON.parse(InMetaData) : InMetaData;
                             searchHash = (typeof (InSearchHash) == "string") ? JSON.parse(InSearchHash) : InSearchHash;
                         } catch (err) {
-                            console.log({ details: "removeTidalPoolData MetaData parse : ", error: err });
+                            console.log({ details: "RemoveData MetaData parse : ", error: err });
                             return callback(err);
                         }
                         for (var HashInfo of searchHash) {
                             if (HashInfo && HashInfo.sc) {
                                 var ShortCode = HashInfo.sc;
                                 var type = HashInfo.type;
-                                traverse(MetaData).forEach(function (Value) {
+                                traverse(MetaData).forEach((Value) => {
                                     if (this.key != "undefined" && this.key == ShortCode) {
                                         if (type == "string") {
-                                            redisClient.srem("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
+                                            redisClient.srem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
                                         } else if (type == "integer" || type == "date") {
-                                            redisClient.zrem("TpSearchSet:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                            redisClient.zrem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
                                         }
                                         this.stop();
                                     }
@@ -1493,7 +1222,7 @@ module.exports = class datalake {
                         }
                         return callback(null);
                     }
-                ], function (err) {
+                ], (err) => {
                     if (err) {
                         console.log(err);
                         return callback(null);
@@ -1502,28 +1231,20 @@ module.exports = class datalake {
                 });
 
             } else {
-                console.log({ details: "removeTidalPoolData ", error: "Redis connection problem" });
+                console.log({ details: "RemoveData ", error: "Redis connection problem" });
                 return callback("Redis connection problem");
             }
         } catch (err) {
-            console.log({ details: "removeTidalPoolData exception", error: err });
+            console.log({ details: "RemoveData exception", error: err });
             return callback(err);
         }
     }
 
-    /**
-        * This function is to be called to remove VES Data.
-        * @returns {undefined} Nothing is returned
-        * @function RemoveTidalPoolData
-        * @param {ServerObject} request - Incoming server request object
-        * @param {ServerObject} reply - Outgoing server reply object
-        */
-    RemoveTidalPoolData(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    RemoveData(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
@@ -1551,30 +1272,30 @@ module.exports = class datalake {
                 if (missingMandatoryKeys != "") {
                     retJSON.Status = "false";
                     retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "RemoveTidalPoolData missingMandatoryKeys", error: missingMandatoryKeys });
+                    console.log({ details: "RemoveData missingMandatoryKeys", error: missingMandatoryKeys });
                     return resolve(retJSON);
                 }
-                if (self.RedisConnected) {
+                if (this.RedisConnected) {
                     async.waterfall([
-                        function (callback) {
-                            self.snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, callback);
+                        (callback) => {
+                            this.snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, callback);
                         },
-                        function (Version, callback) {
-                            self.getHash("TpData:" + VESShortCode + ":" + Guid, Keyword, function (err, res) {
+                        (Version, callback) => {
+                            this.getHash("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
                                 if (err) {
-                                    console.log({ details: "removeTidalPoolData:getHash:Error", error: err });
+                                    console.log({ details: "RemoveData:getHash:Error", error: err });
                                     return callback(err);
                                 } else if (res) {
-                                    redisClient.hdel("TpData:" + VESShortCode + ":" + Guid, Keyword);
+                                    redisClient.hdel("Data:" + VESShortCode + ":" + Guid, Keyword);
                                     return callback(null, res);
                                 }
                                 return callback('Hash key not found in Redis');
                             });
                         },
-                        function (MetaData, callback) {
-                            self.removeDataHash(VESShortCode, Guid, Keyword, MetaData, callback);
+                        (MetaData, callback) => {
+                            this.removeDataHash(VESShortCode, Guid, Keyword, MetaData, callback);
                         }
-                    ], function (err) {
+                    ], (err) => {
                         if (err) {
                             retJSON.Status = "false";
                             retJSON.Message = err;
@@ -1588,34 +1309,22 @@ module.exports = class datalake {
                 } else {
                     retJSON.Status = "false";
                     retJSON.Message = "Redis connection problem";
-                    console.log({ details: "RemoveTidalPoolData ", error: "Redis connection problem" });
+                    console.log({ details: "RemoveData ", error: "Redis connection problem" });
                     return resolve(retJSON);
                 }
             } catch (err) {
                 retJSON.Status = "false";
                 retJSON.Message = err;
-                console.log({ details: "RemoveTidalPoolData exception", error: err });
+                console.log({ details: "RemoveData exception", error: err });
                 return resolve(retJSON);
             }
         });
     }
 
-    /**
-     * This function is to be called to checkTPData
-     * @returns {Boolean} Boolean is returned
-     * @function checkTPData
-     * @param  {String} VESShortCode - VESShortCode
-     * @param  {GUID} Guid - Guid
-     * @param  {String} Tag - Tag
-     * @param  {String} Comment - Comment
-     * @param  {String} Action - Action
-     * @param  {String} RollbackVersion - RollbackVersion
-     * @param  {function} callback - callback
-     */
     checkTPData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
         try {
             if (self.RedisConnected) {
-                redisClient.hgetall("TpData:" + VESShortCode + ":" + Guid, function (err, res) {
+                redisClient.hgetall("Data:" + VESShortCode + ":" + Guid, (err, res) => {
                     if (err) {
                         return callback(err);
                     }
@@ -1633,16 +1342,16 @@ module.exports = class datalake {
         }
     }
 
-    snapShotTPData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
+    snapShotData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
         try {
             async.waterfall([
-                function (callback) {
+                (callback) => {
                     self.snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, callback);
                 },
-                function (Version, callback) {
-                    self.getHashAll("TpData:" + VESShortCode + ":" + Guid, function (err, res) {
+                (Version, callback) => {
+                    self.getHashAll("Data:" + VESShortCode + ":" + Guid, (err, res) => {
                         if (err) {
-                            console.log({ details: "RollbackTidalPoolData, snapShotTPData:getHashAll:Error", error: err });
+                            console.log({ details: "RestoreData, snapShotData:getHashAll:Error", error: err });
                             return callback(err);
                         } else if (res) {
                             var items = [];
@@ -1662,50 +1371,50 @@ module.exports = class datalake {
                         return callback('Hash Key not found in Redis');
                     });
                 },
-                function (DataItems, callback) {
-                    async.forEachOf(DataItems, function (item, i, callback) {
-                        self.removeDataHash(item.VESShortCode, item.Guid, item.Keyword, item.MetaData, function (err) {
+                (DataItems, callback) => {
+                    async.forEachOf(DataItems, (item, i, callback) => {
+                        self.removeDataHash(item.VESShortCode, item.Guid, item.Keyword, item.MetaData, (err) => {
                             if (err) {
-                                console.log({ details: "RollbackTidalPoolData, snapShotTPData:removeTidalPoolData:Error", error: err });
+                                console.log({ details: "RestoreData, snapShotData:RemoveData:Error", error: err });
                             }
                             callback(null);
                         });
-                    }, function (err) {
+                    }, (err) => {
                         if (err) {
-                            console.log({ details: "RollbackTidalPoolData, snapShotTPData forEachOf Error", error: err });
+                            console.log({ details: "RestoreData, snapShotTPData forEachOf Error", error: err });
                             return callback(err);
                         }
-                        redisClient.del("TpData:" + VESShortCode + ":" + Guid);
+                        redisClient.del("Data:" + VESShortCode + ":" + Guid);
                         return callback(null);
                     });
                 }
-            ], function (err) {
+            ], (err) => {
                 if (err) {
-                    console.log({ details: "RollbackTidalPoolData, snapShotTPData Error", error: err });
+                    console.log({ details: "RestoreData, snapShotTPData Error", error: err });
                     return callback(err);
                 }
                 return callback(null, VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self);
             });
         } catch (error) {
-            console.log({ details: "RollbackTidalPoolData,snapShotTPData Exception", error: error });
+            console.log({ details: "RestoreData,snapShotTPData Exception", error: error });
             return callback(error);
         }
     }
 
-    rollbackTPData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
+    rollbackData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
         try {
             async.waterfall([
-                function (callback) {
-                    redisClient.zrangebyscore("TpDataArchive:" + VESShortCode + ":" + Guid, RollbackVersion, RollbackVersion, function (err, res) {
+                (callback) => {
+                    redisClient.zrangebyscore("DataArchive:" + VESShortCode + ":" + Guid, RollbackVersion, RollbackVersion, (err, res) => {
                         if (err) {
-                            console.log({ details: "RollbackTidalPoolData zrangebyscore Error", error: err });
+                            console.log({ details: "RestoreData zrangebyscore Error", error: err });
                             return callback(err);
                         } else if (res) {
                             var response = '';
                             try {
                                 response = (typeof (res[0]) == "string") ? JSON.parse(res[0]) : res[0];
                             } catch (exp) {
-                                console.log({ details: "RollbackTidalPoolData res parse : ", error: exp });
+                                console.log({ details: "RestoreData res parse : ", error: exp });
                                 return callback(exp);
                             }
                             if (!response) {
@@ -1733,48 +1442,40 @@ module.exports = class datalake {
                         return callback('Hash Key not found in Redis zrangebyscore');
                     });
                 },
-                function (DataItems, callback) {
-                    async.forEachOf(DataItems, function (item, i, callback) {
-                        self.populateTPSearchSet(item.VESShortCode, item.Guid, item.Keyword, item.MetaData, null, function (err) {
+                (DataItems, callback) => {
+                    async.forEachOf(DataItems, (item, i, callback) => {
+                        self.populateSearchIndex(item.VESShortCode, item.Guid, item.Keyword, item.MetaData, null, (err) => {
                             if (err) {
-                                console.log({ details: "RollbackTidalPoolData forEachOf Error", error: err });
+                                console.log({ details: "RestoreData forEachOf Error", error: err });
                             }
                             return callback(null);
                         });
-                    }, function (err) {
+                    }, (err) => {
                         if (err) {
-                            console.log({ details: "RollbackTidalPoolData forEachOf Error", error: err });
+                            console.log({ details: "RestoreData forEachOf Error", error: err });
                             return callback(err);
                         }
                         return callback(null);
                     });
                 }
-            ], function (err) {
+            ], (err) => {
                 if (err) {
-                    console.log({ details: "RollbackTidalPoolData forEachOf Error", error: err });
+                    console.log({ details: "RestoreData forEachOf Error", error: err });
                     return callback(err);
                 }
                 return callback(null);
             });
         } catch (error) {
-            console.log({ details: "RollbackTidalPoolData forEachOf Error", error: error });
+            console.log({ details: "RestoreData forEachOf Error", error: error });
             return callback(error);
         }
     }
 
-    /**
-        * This function is to be called to rollback VES Data.
-        * @returns {undefined} Nothing is returned
-        * @function RollbackTidalPoolData
-        * @param {ServerObject} request - Incoming server request object
-        * @param {ServerObject} reply - Outgoing server reply object
-        */
-    RollbackTidalPoolData(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    RestoreData(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
@@ -1802,19 +1503,19 @@ module.exports = class datalake {
                 if (missingMandatoryKeys != "") {
                     retJSON.Status = "false";
                     retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "RollbackTidalPoolData missingMandatoryKeys", error: missingMandatoryKeys });
+                    console.log({ details: "RestoreData missingMandatoryKeys", error: missingMandatoryKeys });
                     return resolve(retJSON);
                 }
-                if (self.RedisConnected) {
+                if (this.RedisConnected) {
                     async.waterfall([
-                        async.constant(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self),
-                        conditional.if(self.checkTPData, self.snapShotTPData),
-                        function (VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, asyncself, callback) {
-                            self.rollbackTPData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, asyncself, callback);
+                        async.constant(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, this),
+                        conditional.if(this.checkTPData, this.snapShotData),
+                        (VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, asyncself, callback) => {
+                            this.rollbackData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, asyncself, callback);
                         }
-                    ], function (err) {
+                    ], (err) => {
                         if (err) {
-                            console.log({ details: "RollbackTidalPoolData Error", error: err });
+                            console.log({ details: "RestoreData Error", error: err });
                             retJSON.Status = "false";
                             retJSON.Message = err;
                         } else {
@@ -1826,153 +1527,23 @@ module.exports = class datalake {
                 } else {
                     retJSON.Status = "false";
                     retJSON.Message = "Redis connection problem";
-                    console.log({ details: "RollbackTidalPoolData ", error: "Redis connection problem" });
+                    console.log({ details: "RestoreData ", error: "Redis connection problem" });
                     return resolve(retJSON);
                 }
             } catch (err) {
                 retJSON.Status = "false";
                 retJSON.Message = err;
-                console.log({ details: "RollbackTidalPoolData exception", error: err });
+                console.log({ details: "RestoreData exception", error: err });
                 return resolve(retJSON);
             }
         });
     }
 
-    /**
-        * This function is to be called to update VES data and Search Sets.
-        * @returns {undefined} Nothing is returned
-        * @function UpdateTidalPoolHash
-        * @param {ServerObject} request - Incoming server request object
-        * @param {ServerObject} reply - Outgoing server reply object
-        */
-    UpdateTidalPoolHash(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    ListSearchIndex(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
-
-                if (!payload) {
-                    return reject({ Status: false, Message: 'Invalid Postdata' });
-                }
-
-                var Guid = "", VESShortCode = "";
-                var missingMandatoryKeys = "";
-                if (payload.Guid) {
-                    Guid = payload.Guid.toString();
-                } else {
-                    missingMandatoryKeys = "Guid";
-                }
-                if (payload.VESShortCode) {
-                    VESShortCode = payload.VESShortCode.toString();
-                } else {
-                    missingMandatoryKeys = (missingMandatoryKeys == "" ? "VESShortCode" : missingMandatoryKeys + ", VESShortCode");
-                }
-                if (missingMandatoryKeys != "") {
-                    retJSON.Status = "false";
-                    retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "RollbackTidalPoolData missingMandatoryKeys", error: missingMandatoryKeys });
-                    return resolve(retJSON);
-                }
-                if (self.RedisConnected) {
-                    async.waterfall([
-                        function (callback) {
-                            self.getHashAll("TpData:" + VESShortCode + ":" + Guid, function (err, res) {
-                                if (err) {
-                                    console.log({ details: "UpdateTidalPoolHash:getHashAll:Error", error: err });
-                                    return callback(err);
-                                } else if (res) {
-                                    var items = [];
-                                    var keys = Object.keys(res);
-                                    for (var i = 0; i < keys.length; i++) {
-                                        var retObj = {};
-                                        var Keyword = keys[i];
-                                        var MetaData = res[keys[i]];
-                                        retObj.VESShortCode = VESShortCode;
-                                        retObj.Guid = Guid;
-                                        retObj.Keyword = Keyword;
-                                        retObj.MetaData = MetaData;
-                                        items.push(retObj);
-                                    }
-                                    return callback(null, items);
-                                }
-                                return callback('Hash Key not found in Redis');
-                            });
-                        },
-                        function (items, callback) {
-                            async.forEachOf(items, function (item, i, callback) {
-                                self.populateTPSearchSet(item.VESShortCode, item.Guid, item.Keyword, item.MetaData, 'Refresh', function (err) {
-                                    if (err) {
-                                        console.log({ details: "UpdateTidalPoolHash:populateTPSearchSet:Error", error: err });
-                                        return callback(err);
-                                    }
-                                    callback(null);
-                                });
-                            }, function (err) {
-                                if (err) {
-                                    console.log({ details: "UpdateTidalPoolHash forEachOf exception", error: err });
-                                    return callback(err);
-                                }
-                                return callback(null);
-                            });
-                        }
-                    ], function (err) {
-                        if (err) {
-                            console.log({ details: "UpdateTidalPoolHash waterfall", error: err });
-                            retJSON.Status = "false";
-                            retJSON.Message = err;
-                        } else {
-                            retJSON.Status = "true";
-                            retJSON.Message = "Success";
-                        }
-                        return resolve(retJSON);
-                    });
-                } else {
-                    console.log({ details: "UpdateTidalPoolHash", error: "Redis connection problem" });
-                    retJSON.Status = "false";
-                    retJSON.Message = "Redis connection problem";
-                    return resolve(retJSON);
-                }
-            } catch (err) {
-                console.log({ details: "UpdateTidalPoolHash exception", error: err });
-                retJSON.Status = "false";
-                retJSON.Message = err;
-                return resolve(retJSON);
-            }
-        });
-    }
-
-    getSchemaList() {
-        return new Promise(function (resolve, reject) {
-            var retJSON = {};
-            try {
-                redisClient.keys("TpSchemaSet:*", function (err, res) {
-                    if (err) {
-                        retJSON.Status = 'false';
-                        retJSON.Message = err;
-                        return resolve(retJSON);
-                    }
-                    retJSON.Status = 'true';
-                    retJSON.Message = 'Success';
-                    retJSON = res.toString().replace(/TpSchemaSet:/g, "").
-                        split(',');
-                    return resolve(retJSON);
-                });
-            } catch (error) {
-                retJSON.Status = "false";
-                retJSON.Message = error;
-                console.log({ details: "getSchemaList exception", error: error });
-                return reject(retJSON);
-            }
-        });
-    }
-
-    GetSearchHashSchema(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
-            var retJSON = {};
-            try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 var Keyword = "", VESShortCode = "";
                 var missingMandatoryKeys = "";
@@ -1989,14 +1560,15 @@ module.exports = class datalake {
                 if (missingMandatoryKeys != "") {
                     retJSON.Status = "false";
                     retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "RollbackTidalPoolData missingMandatoryKeys", error: missingMandatoryKeys });
+                    console.log({ details: "ListSearchIndex missingMandatoryKeys", error: missingMandatoryKeys });
                     return reject(retJSON);
                 }
 
-                self.getHash("TpSearchHash:" + VESShortCode, Keyword, function (err, res) {
+                this.getHash("Index:" + VESShortCode, Keyword, (err, res) => {
                     if (err) {
                         retJSON.Status = "false";
                         retJSON.Message = err;
+                        console.log("Error:ListSearchIndex", err);
                         return resolve(retJSON);
                     }
                     retJSON.Status = "true";
@@ -2009,17 +1581,17 @@ module.exports = class datalake {
                 console.log(error);
                 retJSON.Status = 'false';
                 retJSON.Error = error;
+                console.log("Exception:ListSearchIndex", error);
                 return resolve(retJSON);
             }
         });
     }
 
-    RefreshTidalPoolData(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    RefreshSchemaSearchIndex(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
@@ -2036,15 +1608,15 @@ module.exports = class datalake {
                 if (missingMandatoryKeys != "") {
                     retJSON.Status = "false";
                     retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "RefreshTidalPoolData missingMandatoryKeys", error: missingMandatoryKeys });
+                    console.log({ details: "RefreshSchemaSearchIndex missingMandatoryKeys", error: missingMandatoryKeys });
                     return resolve(retJSON);
                 }
-                if (self.RedisConnected) {
+                if (this.RedisConnected) {
                     async.waterfall([
-                        function (callback) {
-                            redisClient.smembers("TpSchemaSet:" + VESShortCode, function (err, res) {
+                        (callback) => {
+                            redisClient.smembers("Master:" + VESShortCode, (err, res) => {
                                 if (err) {
-                                    console.log({ details: "RefreshTidalPoolData:getHashAll:Error", error: err });
+                                    console.log({ details: "RefreshSchemaSearchIndex:getHashAll:Error", error: err });
                                     return callback(err);
                                 } else if (res) {
                                     return callback(null, res);
@@ -2052,11 +1624,11 @@ module.exports = class datalake {
                                 return callback('Hash Key not found in Redis');
                             });
                         },
-                        function (ScemaItems, callback) {
-                            async.forEachOfSeries(ScemaItems, function (Guid, key, callbackeach) {
-                                self.getHashAll("TpData:" + VESShortCode + ":" + Guid, function (err, res) {
+                        (ScemaItems, callback) => {
+                            async.forEachOfSeries(ScemaItems, (Guid, key, callbackeach) => {
+                                this.getHashAll("Data:" + VESShortCode + ":" + Guid, (err, res) => {
                                     if (err) {
-                                        console.log({ details: "RefreshTidalPoolData:getHashAll:Error", error: err });
+                                        console.log({ details: "RefreshSchemaSearchIndex:getHashAll:Error", error: err });
                                         return callbackeach(null);
                                     } else if (res) {
                                         var items = [];
@@ -2071,17 +1643,17 @@ module.exports = class datalake {
                                             retObj.MetaData = MetaData;
                                             items.push(retObj);
                                         }
-                                        async.forEachOf(items, function (item, i, callbackOf) {
-                                            self.populateTPSearchSet(item.VESShortCode, item.Guid, item.Keyword, item.MetaData, 'Refresh', function (err) {
+                                        async.forEachOf(items, (item, i, callbackOf) => {
+                                            this.populateSearchIndex(item.VESShortCode, item.Guid, item.Keyword, item.MetaData, 'Refresh', (err) => {
                                                 if (err) {
-                                                    console.log({ details: "RefreshTidalPoolData:populateTPSearchSet:Error", error: err });
+                                                    console.log({ details: "RefreshSchemaSearchIndex:populateSearchIndex:Error", error: err });
                                                     return callbackOf(err);
                                                 }
                                                 callbackOf(null);
                                             });
-                                        }, function (err) {
+                                        }, (err) => {
                                             if (err) {
-                                                console.log({ details: "RefreshTidalPoolData forEachOf exception", error: err });
+                                                console.log({ details: "RefreshSchemaSearchIndex forEachOf exception", error: err });
                                                 return callbackeach(err);
                                             }
                                             return callbackeach(null);
@@ -2090,17 +1662,17 @@ module.exports = class datalake {
                                         return callbackeach(null);
                                     }
                                 });
-                            }, function (err) {
+                            }, (err) => {
                                 if (err) {
-                                    console.log({ details: "RefreshTidalPoolData:getHashAll:Error", error: err });
+                                    console.log({ details: "RefreshSchemaSearchIndex:getHashAll:Error", error: err });
                                     return callback(err);
                                 }
                                 return callback(null);
                             });
                         }
-                    ], function (err) {
+                    ], (err) => {
                         if (err) {
-                            console.log({ details: "RefreshTidalPoolData waterfall", error: err });
+                            console.log({ details: "RefreshSchemaSearchIndex waterfall", error: err });
                             retJSON.Status = "false";
                             retJSON.Message = err;
                         } else {
@@ -2110,13 +1682,13 @@ module.exports = class datalake {
                         return resolve(retJSON);
                     });
                 } else {
-                    console.log({ details: "RefreshTidalPoolData", error: "Redis connection problem" });
+                    console.log({ details: "RefreshSchemaSearchIndex", error: "Redis connection problem" });
                     retJSON.Status = "false";
                     retJSON.Message = "Redis connection problem";
                     return resolve(retJSON);
                 }
             } catch (err) {
-                console.log({ details: "RefreshTidalPoolData exception", error: err });
+                console.log({ details: "RefreshSchemaSearchIndex exception", error: err });
                 retJSON.Status = "false";
                 retJSON.Message = err;
                 return resolve(retJSON);
@@ -2125,11 +1697,10 @@ module.exports = class datalake {
     }
 
     InsertData(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
 
                 if (!payload.VESShortCode) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
@@ -2142,7 +1713,7 @@ module.exports = class datalake {
                         newMetaData = certStr;
                     } catch (err) {
                         console.log(err);
-                        console.log({ details: "InsertTPData atob certificate exception", error: err });
+                        console.log({ details: "InsertData atob certificate exception", error: err });
                         return reject({ Status: false, Message: 'Invalid certificate Postdata' });
                     }
                 }
@@ -2178,18 +1749,18 @@ module.exports = class datalake {
                 if (missingMandatoryKeys != "") {
                     retJSON.Status = "false";
                     retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "InsertTPData missingMandatoryKeys", error: missingMandatoryKeys });
+                    console.log({ details: "InsertData missingMandatoryKeys", error: missingMandatoryKeys });
                     return resolve(retJSON);
                 }
 
                 async.waterfall([
-                    function (callback) {
-                        self.CreateTPGUID(VESShortCode, Guid, callback);
+                    (callback) => {
+                        this.CreateTPGUID(VESShortCode, Guid, callback);
                     },
-                    function (insertId, callback) {
-                        self.dataInsert(VESShortCode, insertId, Keyword, MetaData, Tag, Comment, Action, retJSON, callback);
+                    (insertId, callback) => {
+                        this.dataInsert(VESShortCode, insertId, Keyword, MetaData, Tag, Comment, Action, retJSON, callback);
                     }
-                ], function (err, result) {
+                ], (err, result) => {
                     if (err) {
                         console.log(err);
                         return reject(err);
@@ -2201,67 +1772,18 @@ module.exports = class datalake {
                 console.log(error);
                 retJSON.Status = "false";
                 retJSON.Message = error;
-                console.log({ details: "InsertTPData exception", error: error });
+                console.log({ details: "InsertData exception", error: error });
                 return resolve(retJSON);
-            }
-        });
-    }
-
-    GetTpSearchHash(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
-            var retJSON = {};
-            try {
-                var payload = self.getPayloadData(postData);
-                var Keyword = "",
-                    VESShortCode = "";
-                var missingMandatoryKeys = "";
-                if (payload.Keyword) {
-                    Keyword = payload.Keyword.toString();
-                } else {
-                    missingMandatoryKeys = "Keyword";
-                }
-                if (payload.VESShortCode) {
-                    VESShortCode = payload.VESShortCode.toString();
-                } else {
-                    missingMandatoryKeys = (missingMandatoryKeys == "" ? "VESShortCode" : missingMandatoryKeys + ", VESShortCode");
-                }
-                if (missingMandatoryKeys != "") {
-                    retJSON.Status = "false";
-                    retJSON.Message = "missingMandatoryKeys : " + missingMandatoryKeys;
-                    console.log({ details: "RollbackTidalPoolData missingMandatoryKeys", error: missingMandatoryKeys });
-                    return reject(retJSON);
-                }
-
-                self.getHash("TpSearchHash:" + VESShortCode, Keyword, function (err, res) {
-                    if (err) {
-                        retJSON.Status = "false";
-                        retJSON.Message = err;
-                        console.log({ details: "GetTpSearchHash:getHash Error", error: err });
-                    } else {
-                        retJSON.Status = "true";
-                        retJSON.Message = "Success";
-                        retJSON.items = JSON.parse(res);
-                    }
-                    console.log('retJSON: ', retJSON);
-                    return resolve(retJSON);
-                });
-            } catch (error) {
-                retJSON.Status = "false";
-                retJSON.Message = error;
-                console.log({ details: "GetTpSearchHash exception", error: retJSON });
-                return reject(retJSON);
             }
         });
     }
 
     getAllSchemaData(VESShortCode, Guid, Keyword, items, callback) {
         // var retJSON = {};
-        var self = this;
         async.waterfall([
-            function (callback) {
+            (callback) => {
                 if (Guid) {
-                    redisClient.sismember("TpSchemaSet:" + VESShortCode, Guid, function (err, res) {
+                    redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
                         if (err) {
                             return callback(err);
                         }
@@ -2271,7 +1793,7 @@ module.exports = class datalake {
                         return callback('Posted VESShortCode not found in TpSchemaSet');
                     });
                 } else {
-                    redisClient.smembers("TpSchemaSet:" + VESShortCode, function (err, res) {
+                    redisClient.smembers("Master:" + VESShortCode, (err, res) => {
                         if (err) {
                             return callback(err);
                         }
@@ -2282,12 +1804,12 @@ module.exports = class datalake {
                     });
                 }
             },
-            function (GuidList, callback) {
+            (GuidList, callback) => {
                 if (Keyword) {
-                    async.forEachOf(GuidList, function (Guid, i, callback) {
-                        self.getHash("TpData:" + VESShortCode + ":" + Guid, Keyword, function (err, res) {
+                    async.forEachOf(GuidList, (Guid, i, callback) => {
+                        this.getHash("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
                             if (err) {
-                                console.log({ details: "GetTidalPoolSchema:getHash:Error", error: err });
+                                console.log({ details: "GetAllSchemaData:getHash:Error", error: err });
                             } else {
                                 var retObj = {};
                                 retObj.Guid = Guid;
@@ -2305,18 +1827,18 @@ module.exports = class datalake {
                             }
                             callback(null);
                         });
-                    }, function (err) {
+                    }, (err) => {
                         if (err) {
-                            console.log({ details: "GetTidalPoolSchema exception", error: err });
+                            console.log({ details: "GetAllSchemaData exception", error: err });
                             return callback(err);
                         }
                         return callback(null);
                     });
                 } else {
-                    async.forEachOf(GuidList, function (Guid, i, callback) {
-                        self.getHashAll("TpData:" + VESShortCode + ":" + Guid, function (err, res) {
+                    async.forEachOf(GuidList, (Guid, i, callback) => {
+                        this.getHashAll("Data:" + VESShortCode + ":" + Guid, (err, res) => {
                             if (err) {
-                                console.log({ details: "GetTidalPoolSchema:getHashAll:Error", error: err });
+                                console.log({ details: "GetAllSchemaData:getHashAll:Error", error: err });
                             } else if (res) {
                                 var keys = Object.keys(res);
                                 for (var i = 0; i < keys.length; i++) {
@@ -2340,16 +1862,16 @@ module.exports = class datalake {
                             callback(null);
                         });
 
-                    }, function (err) {
+                    }, (err) => {
                         if (err) {
-                            console.log({ details: "GetTidalPoolSchema exception", error: err });
+                            console.log({ details: "GetAllSchemaData exception", error: err });
                             return callback(err);
                         }
                         return callback(null);
                     });
                 }
             }
-        ], function (err) {
+        ], (err) => {
             if (err) {
                 return callback(null, err);
             }
@@ -2357,12 +1879,11 @@ module.exports = class datalake {
         });
     }
 
-    GetDatafromSchemas(postData) {
-        var self = this;
-        return new Promise(function (resolve, reject) {
+    SearchMultipleData(postData) {
+        return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = self.getPayloadData(postData);
+                var payload = this.getPayloadData(postData);
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
                 }
@@ -2394,9 +1915,9 @@ module.exports = class datalake {
                 var arr = Object.keys(payload).filter((item) => !forDeletion.includes(item));
                 var resultArray = [];
                 if (arr.length > 0 && Guid === null) {
-                    async.forEachOfSeries(Schema, function (Shortcode, key, callbackeach) {
-                        self.SearchTPHash(Shortcode, Keyword, newPayload, resultArray, callbackeach);
-                    }, function (err) {
+                    async.forEachOfSeries(Schema, (Shortcode, key, callbackeach) => {
+                        this.SearchTPHash(Shortcode, Keyword, newPayload, resultArray, callbackeach);
+                    }, (err) => {
                         if (err) {
                             retJSON.Status = "false";
                             retJSON.Message = err;
@@ -2408,9 +1929,9 @@ module.exports = class datalake {
                         return resolve(retJSON);
                     });
                 } else if (arr.length === 0) {
-                    async.forEachOfSeries(Schema, function (Shortcode, key, callbackeach) {
-                        self.getAllSchemaData(Shortcode, Guid, Keyword, resultArray, callbackeach);
-                    }, function (err) {
+                    async.forEachOfSeries(Schema, (Shortcode, key, callbackeach) => {
+                        this.getAllSchemaData(Shortcode, Guid, Keyword, resultArray, callbackeach);
+                    }, (err) => {
                         if (err) {
                             retJSON.Status = "false";
                             retJSON.Message = err;

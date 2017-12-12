@@ -19,30 +19,56 @@ const dl = new datalake();
 
 ## Available Methods
 
-S.No | Method Name | Description |
-|- | --- | -- |
-1  | [createConnection](#createconnection) | This will Create Redis Connection pool object. |
-2  | [closeConnection](#closeconnection) | This will close already created Redis connection pool if any. |
-3  | [showStatus](#showstatus) | Returns the Status of Redis connection |
-4  | [SetupSearchHash](#setupsearchhash) | Defining Redis Schema index keys |
-5  | [InsertTidalPoolSchema](#inserttidalpoolschema) | This will Create new Schema |
-6  | [InsertTPData](#inserttpdata) | This will insert Key value pair against the Schema given |
-7  | [InsertData](#insertdata) | This will insert Key value pair against the Schema given, if Schema is not found, automatically will create new Schema and insert the key value pair against the newly created schema |
-9  | [GetTidalPoolSchema](#gettidalpoolschema) | This will search records for given Keyword, Schema and returns all Key-value pair available in the schema. Result can be filtered with particular Guid |
-10 | [SearchTidalPoolHash](#searchtidalpoolhash) | This will search record for given PropertyField, PropertyValue, Keyword and SchemaName including comma(,) separated PropertyValues and range of PropertyValue |
-11 | [GetDatafromSchemas](#getdatafromschemas) | This Method is the combination of GetSearchHashSchema, GetTidalPoolSchema, and SearchTidalPoolHash. This will search the records for given PropertyField, PropertyValue, Keyword and SchemaName. Multi-value search of records using comma(,) separated list of PropertyValue(s) or range between the PropertyValue(s) or it can be filtered with particular Guid. **It can also performs multiple comma(,) separated Schema Name search**. |
-12 | [GetSchemaList](#getschemalist) | GetSchemaList will return list of Schema Names available in the Selected Redis DB. |
-8  | [GetSearchHashSchema](#getsearchhashschema) | This will return the defined Redis Schema index keys for the given Schema Name. |
-13 | [GetTpSearchHash](#gettpsearchhash) | This will return the defined Redis Schema index keys for the given Schema Name. |
-14 | [SetKeyData](#setkeydata) | Set cache data into the Redis DB for the given key-value pair with TTL(Time to live) provided. _If TTL(Time to live) not provided, it will set cache data as permanent data._ |
-15 | [GetKeyData](#getkeydata) | Get the value from cache memory for given search key before the TTL(Time to live) expires|
-16 | [RefreshTidalPoolData](#refreshtidalpooldata) | Refresh/Re-Build all the search index for the given Schema Name |
-17 | [UpdateTidalPoolHash](#updatetidalpoolhash) | Refresh/Re-Build particular search index for the given Guid, Schema Name. |
-18 | [SnapshotTidalPoolData](#snapshottidalpooldata) | It Creates Backup copy of given Guid, Schema Name. |
-19 | [RemoveTidalPoolData](#removetidalpooldata) | It Creates Backup copy of given Guid, Schema Name and Removes Key-value pair from the Schema. |
-20 | [RollbackTidalPoolData](#rollbacktidalpooldata) | It Creates Backup copy of current Key-Value pair for the Given Guid-Schema and Replaces old Key-Value pair from Archive. |
+| S.No | Method Name | Description |
+| ---- | ----------- | ----------- |
+| 1  | [createConnection](#createconnection) | This will Create Redis Connection pool object. |
+| 2  | [closeConnection](#closeconnection) | This will close already created Redis connection pool if any. |
+| 3  | [showStatus](#showstatus) | Returns the Status of Redis connection |
+| 4  | [SetupSearchHash](#setupsearchhash) | Defining Redis Schema index keys |
+| 5  | [InsertTidalPoolSchema](#inserttidalpoolschema) | This will Create new Schema |
+| 6  | [InsertTPData](#inserttpdata) | This will insert Key value pair against the Schema given |
+| 7  | [InsertData](#insertdata) | This will insert Key value pair against the Schema given, if Schema is not found, automatically will create new Schema and insert the key value pair against the newly created schema |
+| 8  | [GetTidalPoolSchema](#gettidalpoolschema) | This will search records for given Keyword, Schema and returns all Key-value pair available in the schema. Result can be filtered with particular Guid |
+| 9  | [SearchTidalPoolHash](#searchtidalpoolhash) | This will search record for given PropertyField, PropertyValue, Keyword and SchemaName including comma(,) separated PropertyValues and range of PropertyValue |
+| 10 | [GetDatafromSchemas](#getdatafromschemas) | This Method is the combination of GetSearchHashSchema, GetTidalPoolSchema, and SearchTidalPoolHash. This will search the records for given PropertyField, PropertyValue, Keyword and SchemaName. Multi-value search of records using comma(,) separated list of PropertyValue(s) or range between the PropertyValue(s) or it can be filtered with particular Guid. **It can also performs multiple comma(,) separated Schema Name search**. |
+| 11 | [GetSchemaList](#getschemalist) | GetSchemaList will return list of Schema Names available in the Selected Redis DB. |
+| 12 | [GetSearchHashSchema](#getsearchhashschema) | This will return the defined Redis Schema index keys for the given Schema Name. |
+| 13 | [GetTpSearchHash](#gettpsearchhash) | This will return the defined Redis Schema index keys for the given Schema Name. |
+| 14 | [SetKeyData](#setkeydata) | Set cache data into the Redis DB for the given key-value pair with TTL(Time to live) provided. _If TTL(Time to live) not provided, it will set cache data as permanent data._ |
+| 15 | [GetKeyData](#getkeydata) | Get the value from cache memory for given search key before the TTL(Time to live) expires|
+| 16 | [RefreshTidalPoolData](#refreshtidalpooldata) | Refresh/Re-Build all the search index for the given Schema Name |
+| 17 | [UpdateTidalPoolHash](#updatetidalpoolhash) | Refresh/Re-Build particular search index for the given Guid, Schema Name. |
+| 18 | [SnapshotTidalPoolData](#snapshottidalpooldata) | It Creates Backup copy of given Guid, Schema Name. |
+| 19 | [RemoveTidalPoolData](#removetidalpooldata) | It Creates Backup copy of given Guid, Schema Name and Removes Key-value pair from the Schema. |
+| 20 | [RollbackTidalPoolData](#rollbacktidalpooldata) | It Creates Backup copy of current Key-Value pair for the Given Guid-Schema and Replaces old Key-Value pair from Archive. |
+
+_Function Names are Renamed Please Read below Table for new function name_
+
+| S.No | Method Name | Renamed To |
+| ---- | ----------- | ---------- |
+| 1| [createConnection](#createconnection) | CreateConnection |
+| 2| [closeConnection](#closeconnection) | CloseConnection |
+| 3| [showStatus](#showstatus) | ShowConnectionStatus |
+| 4| [SetupSearchHash](#setupsearchhash) | ConfigureSearchIndex |
+| 5| [InsertTidalPoolSchema](#inserttidalpoolschema) | CreateSchema |
+| 6| [InsertTPData](#inserttpdata) | InsertData |
+| 7| [InsertData](#insertdata) | InsertData |
+| 8| [GetTidalPoolSchema](#gettidalpoolschema) | GetAllSchemaData |
+| 9| [SearchTidalPoolHash](#searchtidalpoolhash) | SearchDataByProperty |
+| 10| [GetDatafromSchemas](#getdatafromschemas) | SearchMultipleData |
+| 11| [GetSchemaList](#getschemalist) | ListSchemas |
+| 12| [GetSearchHashSchema](#getsearchhashschema) | ListSearchIndex |
+| 13| [GetTpSearchHash](#gettpsearchhash) | ListSearchIndex |
+| 14| [SetKeyData](#setkeydata) | SetCacheData |
+| 15| [GetKeyData](#getkeydata) | GetCacheData |
+| 16| [RefreshTidalPoolData](#refreshtidalpooldata) | RefreshSchemaSearchIndex |
+| 17| [UpdateTidalPoolHash](#updatetidalpoolhash) | RefreshSchemaSearchIndex |
+| 18| [SnapshotTidalPoolData](#snapshottidalpooldata) | CreateBackupData |
+| 19| [RemoveTidalPoolData](#removetidalpooldata) | RemoveData |
+| 20| [RollbackTidalPoolData](#rollbacktidalpooldata) | RestoreData |
 
 ## Methods
+
 -----------------------------------------
 
 ### **createConnection**
@@ -93,14 +119,9 @@ Code:
 ```js
 const datalake = require('datalake');
 const dl = new datalake();
-dl.closeConnection(postData).
-    then((response) => {
-        // do your logics here
-        console.log(response);
-    }).
-    catch((err) => {
-        console.log(err);
-    });
+
+dl.closeConnection();
+console.log('Connection closed');
 ```
 
 -----------------------------------------
