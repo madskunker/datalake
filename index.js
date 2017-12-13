@@ -36,9 +36,7 @@ module.exports = class datalake {
                     return resolve();
                 });
             });
-            client.on('error', (err) => {
-                return reject(err);
-            });
+            client.on('error', (err) => reject(err));
         });
     }
     CloseConnection() {
@@ -153,7 +151,7 @@ module.exports = class datalake {
                 redisClient.sadd('Master:' + VESShortCode, myUUID);
             } else {
                 console.log({ details: 'CreateTPGUID', error: 'Redis connection problem' });
-                return callback({error: 'Redis connection problem' });
+                return callback({ error: 'Redis connection problem' });
             }
             return callback(null, myUUID);
         } catch (err) {
@@ -218,15 +216,15 @@ module.exports = class datalake {
         });
     }
 
-    SetupSearchHash(VESShortCode, Keyword, ShortCodes) {
+    SetupSearchIndex(VESShortCode, Keyword, ShortCodes) {
         try {
             if (this.RedisConnected) {
                 redisClient.hset("Index:" + VESShortCode, Keyword, ShortCodes);
             } else {
-                console.log({ details: "SetupTPSearchHash", error: "Redis connection problem" });
+                console.log({ details: "SetupSearchIndex", error: "Redis connection problem" });
             }
         } catch (err) {
-            console.log({ details: "SetupTPSearchHash exception", error: err });
+            console.log({ details: "SetupSearchIndex exception", error: err });
         }
     }
 
@@ -242,7 +240,7 @@ module.exports = class datalake {
 
                 if (this.RedisConnected) {
                     var ShortCodes = (typeof (payload.ShortCodes) == "string") ? payload.ShortCodes : JSON.stringify(payload.ShortCodes);
-                    this.SetupSearchHash(payload.VESShortCode, payload.Keyword, ShortCodes);
+                    this.SetupSearchIndex(payload.VESShortCode, payload.Keyword, ShortCodes);
                     retJSON.Status = "true";
                     retJSON.Message = "Success";
                 } else {
@@ -1957,4 +1955,147 @@ module.exports = class datalake {
         });
     }
 
+    createConnection(Payload) {
+        return new Promise((resolve, reject) => {
+            this.CreateConnection(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    closeConnection(Payload) {
+        return new Promise((resolve, reject) => {
+            this.CloseConnection(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    showStatus(Payload) {
+        return new Promise((resolve, reject) => {
+            this.ShowConnectionStatus(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    sSetupSearchHash(Payload) {
+        return new Promise((resolve, reject) => {
+            this.ConfigureSearchIndex(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    InsertTidalPoolSchema(Payload) {
+        return new Promise((resolve, reject) => {
+            this.CreateSchema(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    InsertTPData(Payload) {
+        return new Promise((resolve, reject) => {
+            this.InsertData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    /** Directly called to main function no need to Depricate InsertData function name * /
+    InsertData(Payload) {
+        return new Promise((resolve, reject) => {
+            this.InsertData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    /** */
+    GetTidalPoolSchema(Payload) {
+        return new Promise((resolve, reject) => {
+            this.GetAllSchemaData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    SearchTidalPoolHash(Payload) {
+        return new Promise((resolve, reject) => {
+            this.SearchDataByProperty(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    GetDatafromSchemas(Payload) {
+        return new Promise((resolve, reject) => {
+            this.SearchMultipleData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    GetSchemaList(Payload) {
+        return new Promise((resolve, reject) => {
+            this.ListSchemas(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    GetSearchHashSchema(Payload) {
+        return new Promise((resolve, reject) => {
+            this.ListSearchIndex(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    GetTpSearchHash(Payload) {
+        return new Promise((resolve, reject) => {
+            this.ListSearchIndex(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    SetKeyData(Payload) {
+        return new Promise((resolve, reject) => {
+            this.SetCacheData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    GetKeyData(Payload) {
+        return new Promise((resolve, reject) => {
+            this.GetCacheData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    RefreshTidalPoolData(Payload) {
+        return new Promise((resolve, reject) => {
+            this.RefreshSchemaSearchIndex(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    UpdateTidalPoolHash(Payload) {
+        return new Promise((resolve, reject) => {
+            this.RefreshSchemaSearchIndex(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    SnapshotTidalPoolData(Payload) {
+        return new Promise((resolve, reject) => {
+            this.CreateBackupData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    RemoveTidalPoolData(Payload) {
+        return new Promise((resolve, reject) => {
+            this.RemoveData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    RollbackTidalPoolData(Payload) {
+        return new Promise((resolve, reject) => {
+            this.RestoreData(Payload).
+                then((result) => resolve(result)).
+                catch((err) => reject(err));
+        });
+    }
+    
 };
