@@ -42,31 +42,30 @@ const dl = new datalake();
 | 19 | [RemoveTidalPoolData](#removetidalpooldata) | It Creates Backup copy of given Guid, Schema Name and Removes Key-value pair from the Schema. |
 | 20 | [RollbackTidalPoolData](#rollbacktidalpooldata) | It Creates Backup copy of current Key-Value pair for the Given Guid-Schema and Replaces old Key-Value pair from Archive. |
 
-_**v1.3.2 is and lower versions are deprecated** Function Names are Renamed Please Read below Table for new function name_
+_Function Names are Renamed Please Read below Table for new function name_
 
 | S.No | Method Name | Renamed To |
 | ---- | ----------- | ---------- |
-| 1| [createConnection](#createconnection) | CreateConnection |
-| 2| [closeConnection](#closeconnection) | CloseConnection |
-| 3| [showStatus](#showstatus) | ShowConnectionStatus |
-| 4| [SetupSearchHash](#setupsearchhash) | ConfigureSearchIndex |
-| 5| [InsertTidalPoolSchema](#inserttidalpoolschema) | CreateSchema |
-| 6| [InsertTPData](#inserttpdata) | InsertData |
-| 7| [InsertData](#insertdata) | InsertData |
-| 8| [GetTidalPoolSchema](#gettidalpoolschema) | GetAllSchemaData |
-| 9| [SearchTidalPoolHash](#searchtidalpoolhash) | SearchDataByProperty |
-| 10| [GetDatafromSchemas](#getdatafromschemas) | SearchMultipleData |
-| 11| [GetSchemaList](#getschemalist) | ListSchemas |
-| 12| [GetSearchHashSchema](#getsearchhashschema) | ListSearchIndex |
-| 13| [GetTpSearchHash](#gettpsearchhash) | ListSearchIndex |
-| 14| [SetKeyData](#setkeydata) | SetCacheData |
-| 15| [GetKeyData](#getkeydata) | GetCacheData |
-| 16| [RefreshTidalPoolData](#refreshtidalpooldata) | RefreshSchemaSearchIndex |
-| 17| [UpdateTidalPoolHash](#updatetidalpoolhash) | RefreshSchemaSearchIndex |
-| 18| [SnapshotTidalPoolData](#snapshottidalpooldata) | CreateBackupData |
-| 19| [RemoveTidalPoolData](#removetidalpooldata) | RemoveData |
-| 20| [RollbackTidalPoolData](#rollbacktidalpooldata) | RestoreData |
-
+| 1 | [closeConnection](#closeconnection) | CloseConnection |
+| 2 | [createConnection](#createconnection) | CreateConnection |
+| 3 | [GetDatafromSchemas](#getdatafromschemas) | SearchMultipleData |
+| 4 | [GetKeyData](#getkeydata) | GetCacheData |
+| 5 | [GetSchemaList](#getschemalist) | ListSchemas |
+| 6 | [GetSearchHashSchema](#getsearchhashschema) | ListSearchIndex |
+| 7 | [GetTidalPoolSchema](#gettidalpoolschema) | GetAllSchemaData |
+| 8 | [GetTpSearchHash](#gettpsearchhash) | ListSearchIndex |
+| 9 | [InsertData](#insertdata) | `InsertData` |
+| 10 | [InsertTidalPoolSchema](#inserttidalpoolschema) | CreateSchema |
+| 11 | [InsertTPData](#inserttpdata) | `InsertData` |
+| 12 | [RefreshTidalPoolData](#refreshtidalpooldata) | RefreshSchemaSearchIndex |
+| 13 | [RemoveTidalPoolData](#removetidalpooldata) | RemoveData |
+| 14 | [RollbackTidalPoolData](#rollbacktidalpooldata) | RestoreData |
+| 15 | [SearchTidalPoolHash](#searchtidalpoolhash) | SearchDataByProperty |
+| 16 | [SetKeyData](#setkeydata) | SetCacheData |
+| 17 | [SetupSearchHash](#setupsearchhash) | ConfigureSearchIndex |
+| 18 | [showStatus](#showstatus) | ShowConnectionStatus |
+| 19 | [SnapshotTidalPoolData](#snapshottidalpooldata) | CreateBackupData |
+| 20 | [UpdateTidalPoolHash](#updatetidalpoolhash) | RefreshSchemaSearchIndex |
 ## Methods
 
 -----------------------------------------
