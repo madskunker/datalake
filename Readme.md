@@ -42,7 +42,7 @@ const dl = new datalake();
 | 19 | [RemoveTidalPoolData](#removetidalpooldata) | It Creates Backup copy of given Guid, Schema Name and Removes Key-value pair from the Schema. |
 | 20 | [RollbackTidalPoolData](#rollbacktidalpooldata) | It Creates Backup copy of current Key-Value pair for the Given Guid-Schema and Replaces old Key-Value pair from Archive. |
 
-_Function Names are Renamed Please Read below Table for new function name_
+_Function Names are Renamed in v1.3.4, Please Read below Table for new function name_
 
 | S.No | Method Name | Renamed To |
 | ---- | ----------- | ---------- |
