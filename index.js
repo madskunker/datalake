@@ -1763,7 +1763,7 @@ module.exports = class datalake {
                         console.log(err);
                         return reject(err);
                     }
-                    console.log(result);
+                    // console.log(result);
                     return resolve(result);
                 });
             } catch (error) {
@@ -1885,7 +1885,7 @@ module.exports = class datalake {
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
                 }
-                const Schema = (payload.Schema.indexOf(',') > -1) ? payload.Schema.split(',') : [payload.Schema];
+                const Schema = Array.isArray(payload.Schema) ? payload.Schema : [payload.Schema];
                 const Keyword = payload.Keyword ? payload.Keyword : 'Label';
                 const Guid = payload.Guid ? payload.Guid : null;
                 let PropertyFields = [];
@@ -1957,6 +1957,7 @@ module.exports = class datalake {
 
     createConnection(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use CreateConnection(), createConnection() is depricated');
             this.CreateConnection(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -1964,6 +1965,7 @@ module.exports = class datalake {
     }
     closeConnection(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use CloseConnection(), closeConnection() is depricated');
             this.CloseConnection(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -1971,6 +1973,7 @@ module.exports = class datalake {
     }
     showStatus(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use ShowConnectionStatus(), showStatus() is depricated');
             this.ShowConnectionStatus(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -1978,6 +1981,7 @@ module.exports = class datalake {
     }
     sSetupSearchHash(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use ConfigureSearchIndex(), sSetupSearchHash() is depricated');
             this.ConfigureSearchIndex(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -1985,6 +1989,7 @@ module.exports = class datalake {
     }
     InsertTidalPoolSchema(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use CreateSchema(), InsertTidalPoolSchema() is depricated');
             this.CreateSchema(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -1992,6 +1997,7 @@ module.exports = class datalake {
     }
     InsertTPData(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use InsertData(), InsertTPData() is depricated');
             this.InsertData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2000,6 +2006,7 @@ module.exports = class datalake {
     /** Directly called to main function no need to Depricate InsertData function name * /
     InsertData(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use InsertData(), InsertData() is depricated');
             this.InsertData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2008,6 +2015,7 @@ module.exports = class datalake {
     /** */
     GetTidalPoolSchema(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use GetAllSchemaData(), GetTidalPoolSchema() is depricated');
             this.GetAllSchemaData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2015,6 +2023,7 @@ module.exports = class datalake {
     }
     SearchTidalPoolHash(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use SearchDataByProperty(), SearchTidalPoolHash() is depricated');
             this.SearchDataByProperty(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2022,6 +2031,7 @@ module.exports = class datalake {
     }
     GetDatafromSchemas(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use SearchMultipleData(), GetDatafromSchemas() is depricated');
             this.SearchMultipleData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2029,6 +2039,7 @@ module.exports = class datalake {
     }
     GetSchemaList(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use ListSchemas(), GetSchemaList() is depricated');
             this.ListSchemas(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2036,6 +2047,7 @@ module.exports = class datalake {
     }
     GetSearchHashSchema(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use ListSearchIndex(), GetSearchHashSchema() is depricated');
             this.ListSearchIndex(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2043,6 +2055,7 @@ module.exports = class datalake {
     }
     GetTpSearchHash(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use ListSearchIndex(), GetTpSearchHash() is depricated');
             this.ListSearchIndex(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2050,6 +2063,7 @@ module.exports = class datalake {
     }
     SetKeyData(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use SetCacheData(), SetKeyData() is depricated');
             this.SetCacheData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2057,6 +2071,7 @@ module.exports = class datalake {
     }
     GetKeyData(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use GetCacheData(), GetKeyData() is depricated');
             this.GetCacheData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2064,6 +2079,7 @@ module.exports = class datalake {
     }
     RefreshTidalPoolData(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use RefreshSchemaSearchIndex(), RefreshTidalPoolData() is depricated');
             this.RefreshSchemaSearchIndex(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2071,6 +2087,7 @@ module.exports = class datalake {
     }
     UpdateTidalPoolHash(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use RefreshSchemaSearchIndex(), UpdateTidalPoolHash() is depricated');
             this.RefreshSchemaSearchIndex(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2078,6 +2095,7 @@ module.exports = class datalake {
     }
     SnapshotTidalPoolData(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use CreateBackupData(), SnapshotTidalPoolData() is depricated');
             this.CreateBackupData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2085,6 +2103,7 @@ module.exports = class datalake {
     }
     RemoveTidalPoolData(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use RemoveData(), RemoveTidalPoolData() is depricated');
             this.RemoveData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
@@ -2092,6 +2111,7 @@ module.exports = class datalake {
     }
     RollbackTidalPoolData(Payload) {
         return new Promise((resolve, reject) => {
+            console.error('use RestoreData(), RollbackTidalPoolData() is depricated');
             this.RestoreData(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
