@@ -1955,6 +1955,57 @@ module.exports = class datalake {
         });
     }
 
+    Search(postData) {
+        return new Promise((resolve, reject) => {
+            var retJSON = {};
+            try {
+                var payload = this.getPayloadData(postData);
+                if (!payload) {
+                    return reject({ Status: false, Message: 'Invalid Postdata' });
+                }
+                const Schema = Array.isArray(payload.Schema) ? payload.Schema : [payload.Schema];
+                const Keyword = payload.Keyword ? payload.Keyword : 'Label';
+                const Guid = payload.Guid ? payload.Guid : null;
+                var resultArray = [];
+                if (Guid === null) {
+                    async.forEachOfSeries(Schema, (Shortcode, key, callbackeach) => {
+                        this.SearchTPHash(Shortcode, Keyword, payload, resultArray, callbackeach);
+                    }, (err) => {
+                        if (err) {
+                            retJSON.Status = "false";
+                            retJSON.Message = err;
+                        } else {
+                            retJSON.Status = "true";
+                            retJSON.Message = "Success";
+                            retJSON.items = Object.assign({}, resultArray);
+                        }
+                        return resolve(retJSON);
+                    });
+                } else {
+                    async.forEachOfSeries(Schema, (Shortcode, key, callbackeach) => {
+                        this.getAllSchemaData(Shortcode, Guid, Keyword, resultArray, callbackeach);
+                    }, (err) => {
+                        if (err) {
+                            retJSON.Status = "false";
+                            retJSON.Message = err;
+                        } else {
+                            retJSON.Status = "true";
+                            retJSON.Message = "Success";
+                            retJSON.items = Object.assign({}, resultArray);
+                        }
+                        return resolve(retJSON);
+                    });
+                }
+
+            } catch (error) {
+                retJSON.Status = "false";
+                retJSON.Message = error;
+                console.log(retJSON);
+                return resolve(retJSON);
+            }
+        });
+    }
+
     createConnection(Payload) {
         return new Promise((resolve, reject) => {
             console.error('use CreateConnection(), createConnection() is depricated');
@@ -2117,5 +2168,5 @@ module.exports = class datalake {
                 catch((err) => reject(err));
         });
     }
-    
+
 };
