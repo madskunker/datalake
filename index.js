@@ -261,16 +261,16 @@ module.exports = class datalake {
     addRedisData(type, VESShortCode, Keyword, ShortCode, Value, Guid) {
         try {
             if (type == "string") {
-                redisClient.sadd("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
+                redisClient.sadd("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
             } else if (type == "integer" && !(isNaN(Value))) {
-                redisClient.zadd("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Value, Guid);
+                redisClient.zadd("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Value, Guid);
             } else if (type == "date") {
                 var dateValue = new Date(Value);
                 dateValue = dateValue.toLocaleString();
                 dateValue = dateValue.replace(/[^\w\s]/g, '').replace(/ /g, '').
                     replace(/AM/g, '000');
                 if (!(isNaN(dateValue))) {
-                    redisClient.zadd("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, dateValue, Guid);
+                    redisClient.zadd("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, dateValue, Guid);
                 }
             }
         } catch (err) {
@@ -286,40 +286,64 @@ module.exports = class datalake {
                 if (HashInfo && HashInfo.sc) {
                     var ShortCode = HashInfo.sc.trim();
                     var type = HashInfo.type.trim();
-                    traverse(MetaData).forEach(function (Value) {
-                        if (this.key != "undefined" && this.key == ShortCode) {
-                            if (oldMetaData && oldMetaData.hasOwnProperty(ShortCode)) {
-                                traverse(oldMetaData).forEach(function (OldValue) {
-                                    if (this.key != "undefined" && this.key == ShortCode) {
-                                        if (Value.trim() != OldValue.trim()) {
-                                            if (type == "string") {
-                                                redisClient.srem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
-                                            } else if (type == "integer" || type == "date") {
-                                                redisClient.zrem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                    var csv = !!HashInfo.csv;
+                    if (csv) {
+                        for (const Metakey in MetaData) {
+                            if (Metakey == ShortCode) {
+                                if (oldMetaData && oldMetaData.hasOwnProperty(ShortCode)) {
+                                    for (const eachProperty of MetaData[ShortCode]) {
+                                        for (const eachOldProperty of oldMetaData[Metakey]) {
+                                            if (eachProperty != eachOldProperty) {
+                                                if (type == "string") {
+                                                    redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + eachOldProperty.trim(), Guid);
+                                                } else if (type == "integer" || type == "date") {
+                                                    redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                                }
+                                                self.addRedisData(type, VESShortCode, Keyword, ShortCode, eachProperty.trim(), Guid);
                                             }
-                                            self.addRedisData(type, VESShortCode, Keyword, ShortCode, Value.trim(), Guid);
                                         }
-                                        Reflect.deleteProperty(oldMetaData, ShortCode);
-                                        // delete oldMetaData[ShortCode];
-                                        this.stop();
                                     }
-                                });
-                            } else {
-                                self.addRedisData(type, VESShortCode, Keyword, ShortCode, Value.trim(), Guid);
-                            }
-                            this.stop();
-                        }
-                    });
-                    if (oldMetaData) {
-                        traverse(oldMetaData).forEach((OldValue) => {
-                            if (this.key != "undefined" && this.key == ShortCode) {
-                                if (type == "string") {
-                                    redisClient.srem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
-                                } else if (type == "integer" || type == "date") {
-                                    redisClient.zrem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                    Reflect.deleteProperty(oldMetaData, ShortCode);
+                                } else {
+                                    for (const eachProperty of MetaData[Metakey]) {
+                                        self.addRedisData(type, VESShortCode, Keyword, ShortCode, eachProperty.trim(), Guid);
+                                    }
                                 }
                             }
-                        });
+                        }
+                    } else {
+                        for (const Metakey in MetaData) {
+                            if (Metakey == ShortCode) {
+                                if (oldMetaData && oldMetaData.hasOwnProperty(ShortCode)) {
+                                    for (var OldMeta in oldMetaData) {
+                                        if (OldMeta == ShortCode) {
+                                            if (MetaData[Metakey].trim() != oldMetaData[OldMeta].trim()) {
+                                                if (type == "string") {
+                                                    redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + oldMetaData[OldMeta].trim(), Guid);
+                                                } else if (type == "integer" || type == "date") {
+                                                    redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                                }
+                                                self.addRedisData(type, VESShortCode, Keyword, ShortCode, MetaData[Metakey].trim(), Guid);
+                                            }
+                                            Reflect.deleteProperty(oldMetaData, ShortCode);
+                                        }
+                                    }
+                                } else {
+                                    self.addRedisData(type, VESShortCode, Keyword, ShortCode, MetaData[Metakey].trim(), Guid);
+                                }
+                            }
+                        }
+                        if (oldMetaData) {
+                            traverse(oldMetaData).forEach((OldValue) => {
+                                if (this.key != "undefined" && this.key == ShortCode) {
+                                    if (type == "string") {
+                                        redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
+                                    } else if (type == "integer" || type == "date") {
+                                        redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -765,12 +789,12 @@ module.exports = class datalake {
                                             var LOV = SearchValue.split(',');
                                             var lovKey = '';
                                             for (let j = 0; j < LOV.length; j++) {
-                                                lovKey += "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + LOV[j].toString().trim() + ',';
+                                                lovKey += "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + LOV[j].toString().trim() + ',';
                                             }
                                             lovKey = lovKey.slice(0, -1);
                                             SearchLOVString.push(lovKey);
                                         } else {
-                                            Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + SearchValue.trim();
+                                            Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + SearchValue.trim();
                                             SearchListString.push(Search);
                                         }
                                     } else if (type == "integer") {
@@ -778,16 +802,16 @@ module.exports = class datalake {
                                             const LOVScore = SearchValue.split(',');
                                             const LOVScoreInternal = [];
                                             for (let j = 0; j < LOVScore.length; j++) {
-                                                const lovKeyScore = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + LOVScore[j].trim() + "," + LOVScore[j].trim();
+                                                const lovKeyScore = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + LOVScore[j].trim() + "," + LOVScore[j].trim();
                                                 LOVScoreInternal.push(lovKeyScore);
                                             }
                                             SearchLOVScore.push(LOVScoreInternal);
                                         } else {
                                             const Values = SearchValue.split('-');
                                             if (Values.length > 1) {
-                                                Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[1].trim();
+                                                Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[1].trim();
                                             } else {
-                                                Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[0].trim();
+                                                Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[0].trim();
                                             }
                                             SearchListScore.push(Search);
                                         }
@@ -797,7 +821,7 @@ module.exports = class datalake {
                                             var LOVScoreInternal = [];
                                             for (var j = 0; j < LOVScore.length; j++) {
                                                 var searchDT = this.formatDate(LOVScore[j]);
-                                                var lovKeyScore = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + searchDT.trim() + "," + searchDT.trim();
+                                                var lovKeyScore = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + searchDT.trim() + "," + searchDT.trim();
                                                 LOVScoreInternal.push(lovKeyScore);
                                             }
                                             SearchLOVScore.push(LOVScoreInternal);
@@ -806,9 +830,9 @@ module.exports = class datalake {
                                             var fromDate = this.formatDate(Values[0]);
                                             if (Values.length > 1) {
                                                 var toDate = this.formatDate(Values[1]);
-                                                Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + toDate.trim();
+                                                Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + toDate.trim();
                                             } else {
-                                                Search = "SearchIndex:" + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + fromDate.trim();
+                                                Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + fromDate.trim();
                                             }
                                             SearchListScore.push(Search);
                                         }
@@ -1209,9 +1233,9 @@ module.exports = class datalake {
                                 traverse(MetaData).forEach((Value) => {
                                     if (this.key != "undefined" && this.key == ShortCode) {
                                         if (type == "string") {
-                                            redisClient.srem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
+                                            redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
                                         } else if (type == "integer" || type == "date") {
-                                            redisClient.zrem("SearchIndex:" + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                            redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
                                         }
                                         this.stop();
                                     }
