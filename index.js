@@ -807,7 +807,7 @@ module.exports = class datalake {
                                             }
                                             SearchLOVScore.push(LOVScoreInternal);
                                         } else {
-                                            const Values = SearchValue.split('-');
+                                            const Values = SearchValue.split('~');
                                             if (Values.length > 1) {
                                                 Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[1].trim();
                                             } else {
@@ -826,7 +826,7 @@ module.exports = class datalake {
                                             }
                                             SearchLOVScore.push(LOVScoreInternal);
                                         } else {
-                                            var Values = SearchValue.split('-');
+                                            var Values = SearchValue.split('~');
                                             var fromDate = this.formatDate(Values[0]);
                                             if (Values.length > 1) {
                                                 var toDate = this.formatDate(Values[1]);
@@ -1983,7 +1983,9 @@ module.exports = class datalake {
         return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
-                var payload = this.getPayloadData(postData);
+                const recordFrom = postData.recordFrom ? postData.recordFrom : 0;
+                const recordUpto = postData.recordUpto ? postData.recordUpto : 10;
+                const payload = this.getPayloadData(postData);
                 if (!payload) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
                 }
@@ -2001,6 +2003,12 @@ module.exports = class datalake {
                         } else {
                             retJSON.Status = "true";
                             retJSON.Message = "Success";
+                            retJSON.TotalRecords = [];
+                            for (const Shortcode of Schema) {
+                                retJSON.TotalRecords = retJSON.TotalRecords.concat([Shortcode] + ':' + resultArray[Shortcode].length);
+                                // retJSON[Shortcode + 'Count'] = resultArray[Shortcode].length;
+                                resultArray[Shortcode] = resultArray[Shortcode].splice(recordFrom, recordUpto);
+                            }
                             retJSON.items = Object.assign({}, resultArray);
                         }
                         return resolve(retJSON);
@@ -2015,6 +2023,11 @@ module.exports = class datalake {
                         } else {
                             retJSON.Status = "true";
                             retJSON.Message = "Success";
+                            retJSON.TotalRecords = [];
+                            for (const Shortcode of Schema) {
+                                retJSON.TotalRecords = retJSON.TotalRecords.concat([Shortcode] + ':' + resultArray[Shortcode].length);
+                                resultArray[Shortcode] = resultArray[Shortcode].splice(recordFrom, recordUpto);
+                            }
                             retJSON.items = Object.assign({}, resultArray);
                         }
                         return resolve(retJSON);
@@ -2027,6 +2040,64 @@ module.exports = class datalake {
                 console.log(retJSON);
                 return resolve(retJSON);
             }
+        });
+    }
+
+    scanSearch(Search, finalResult, startFrom, endAt) {
+        return new Promise((resolve, reject) => {
+            redisClient.scan(startFrom, 'MATCH', Search + '*', 'COUNT', endAt, (err, result) => {
+                if (err) {
+                    console.log('err:', err);
+                    return reject(err);
+                }
+                for (const distinct of result[1]) {
+                    finalResult = finalResult.concat(distinct.replace(Search, '')); // eslint-disable-line
+                }
+                if (result[0] == 0) {
+                    return resolve(finalResult);
+                }
+                return resolve(this.scanSearch(Search, finalResult, result[0], endAt));
+            });
+        });
+    }
+
+    getDistinctRecords(Payload) {
+        return new Promise((resolve, reject) => {
+            const RecordMoreThan = Payload.RecordMoreThan ? Payload.RecordMoreThan : 1000;
+            const Search = `{SearchIndex}.${Payload.VESShortCode}:${Payload.Keyword ? Payload.Keyword : 'Label'}:${Payload.ShortCode}:`;
+            const retJSON = {};
+            let ResultArr = [];
+            this.scanSearch(Search, ResultArr, 0, 10000).
+                then((finalResult) => {
+                    async.forEachOf(finalResult, (eachDistinct, key, callback) => {
+                        redisClient.scard(Search + eachDistinct, function (err, count) {
+                            if (err) {
+                                console.log(err);
+                                return callback(err);
+                            }
+                            console.log(eachDistinct, count);
+                            if (count >= RecordMoreThan) {
+                                ResultArr = ResultArr.concat(eachDistinct);
+                            }
+                            return callback(null);
+                        });
+                    }, (err) => {
+                        if (err) {
+                            console.log(err);
+                            return reject(err);
+                        }
+                        retJSON.Status = 'Success';
+                        retJSON.DistinctMatches = ResultArr.length;
+                        retJSON.items = ResultArr;
+                        return resolve(retJSON);
+                    });
+                }).
+                catch((err) => {
+                    console.log(err);
+                    retJSON.Status = 'Failed';
+                    retJSON.Message = err;
+                    return reject(retJSON);
+                });
         });
     }
 
