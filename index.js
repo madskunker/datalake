@@ -1992,8 +1992,10 @@ module.exports = class datalake {
                 const Schema = Array.isArray(payload.Schema) ? payload.Schema : [payload.Schema];
                 const Keyword = payload.Keyword ? payload.Keyword : 'Label';
                 const Guid = payload.Guid ? payload.Guid : null;
+                var forDeletion = ['Schema', 'Keyword', 'Guid', 'recordFrom', 'recordUpto'];
+                var arr = Object.keys(payload).filter((item) => !forDeletion.includes(item));
                 var resultArray = [];
-                if (Guid === null) {
+                if (arr.length > 0 && Guid === null) {
                     async.forEachOfSeries(Schema, (Shortcode, key, callbackeach) => {
                         this.SearchTPHash(Shortcode, Keyword, payload, resultArray, callbackeach);
                     }, (err) => {
