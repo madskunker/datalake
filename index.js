@@ -334,7 +334,7 @@ module.exports = class datalake {
                             }
                         }
                         if (oldMetaData) {
-                            traverse(oldMetaData).forEach((OldValue) => {
+                            traverse(oldMetaData).forEach(function (OldValue) {
                                 if (this.key != "undefined" && this.key == ShortCode) {
                                     if (type == "string") {
                                         redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
@@ -921,6 +921,22 @@ module.exports = class datalake {
         }
     }
 
+    sscanSearch(VESShortCode, finalResult, Nextbatch, callback) {
+        redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', (err, result) => {
+            if (err) {
+                console.log('err:', err);
+                return callback(err);
+            }
+            for (const distinct of result[1]) {
+                finalResult = finalResult.concat(distinct); // eslint-disable-line
+            }
+            if (result[0] == 0) {
+                return callback(null, finalResult);
+            }
+            this.sscanSearch(VESShortCode, finalResult, result[0], callback);
+        });
+    }
+
     GetAllSchemaData(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1230,7 +1246,7 @@ module.exports = class datalake {
                             if (HashInfo && HashInfo.sc) {
                                 var ShortCode = HashInfo.sc;
                                 var type = HashInfo.type;
-                                traverse(MetaData).forEach((Value) => {
+                                traverse(MetaData).forEach(function (Value) {
                                     if (this.key != "undefined" && this.key == ShortCode) {
                                         if (type == "string") {
                                             redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
@@ -1802,6 +1818,7 @@ module.exports = class datalake {
 
     getAllSchemaData(VESShortCode, Guid, Keyword, items, callback) {
         // var retJSON = {};
+        var finalResult = [];
         async.waterfall([
             (callback) => {
                 if (Guid) {
@@ -1815,15 +1832,7 @@ module.exports = class datalake {
                         return callback('Posted VESShortCode not found in TpSchemaSet');
                     });
                 } else {
-                    redisClient.smembers("Master:" + VESShortCode, (err, res) => {
-                        if (err) {
-                            return callback(err);
-                        }
-                        if (res) {
-                            return callback(null, res);
-                        }
-                        return callback('Posted VESShortCode not found in TpSchemaSet');
-                    });
+                    this.sscanSearch(VESShortCode, finalResult, 0, callback);
                 }
             },
             (GuidList, callback) => {
@@ -1895,7 +1904,14 @@ module.exports = class datalake {
             }
         ], (err) => {
             if (err) {
-                return callback(null, err);
+                if (items.length == 0) {
+                    if (items[VESShortCode]) {
+                        items[VESShortCode] = items[VESShortCode].concat([]);
+                    } else {
+                        items[VESShortCode] = items.concat([]);
+                    }
+                }
+                return callback(null);
             }
             return callback(null);
         });
@@ -2127,9 +2143,9 @@ module.exports = class datalake {
                 catch((err) => reject(err));
         });
     }
-    sSetupSearchHash(Payload) {
+    SetupSearchHash(Payload) {
         return new Promise((resolve, reject) => {
-            console.error('use ConfigureSearchIndex(), sSetupSearchHash() is depricated');
+            console.error('use ConfigureSearchIndex(), SetupSearchHash() is depricated');
             this.ConfigureSearchIndex(Payload).
                 then((result) => resolve(result)).
                 catch((err) => reject(err));
