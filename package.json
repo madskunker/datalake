@@ -1,6 +1,6 @@
 {
   "name": "datalake",
-  "version": "1.3.16",
+  "version": "1.3.16-alpha",
   "description": "data lake redis lib",
   "main": "index.js",
   "scripts": {

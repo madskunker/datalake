@@ -158,6 +158,22 @@ module.exports = class datalake {
         });
     }
 
+    CreateTPGUID(VESShortCode, Guid, callback) {
+        var myUUID = Guid ? Guid : uuid.v4();
+        try {
+            if (this.RedisConnected) {
+                redisClient.sadd('Master:' + VESShortCode, myUUID);
+            } else {
+                console.log({ details: 'CreateTPGUID', error: 'Redis connection problem' });
+                return callback({ error: 'Redis connection problem' });
+            }
+            return callback(null, myUUID);
+        } catch (err) {
+            console.log({ details: 'CreateTPGUID exception', error: err });
+            return callback(null, myUUID);
+        }
+    }
+    
     getPayloadData(request) {
         try {
             var payloadStr = request;
@@ -177,6 +193,45 @@ module.exports = class datalake {
             console.log({ details: "getPayloadData error", error: err });
             return false;
         }
+    }
+
+    CreateSchema(postData) {
+        return new Promise((resolve, reject) => {
+            var retJSON = {};
+            try {
+                var payload = this.getPayloadData(postData);
+
+                if (!payload.VESShortCode) {
+                    return reject({ Status: false, Message: 'Invalid Postdata' });
+                }
+
+                if (!this.flagLabel) {
+                    return resolve({ Status: "false", Message: "This is function is depricated due to your redis connection type with flagLabel = false" });
+                }
+
+                this.CreateTPGUID(payload.VESShortCode, payload.Guid ? payload.Guid : null, (err, Guid) => {
+                    if (err) {
+                        console.log('redis not connected');
+                        console.log({ details: "CreateSchema", error: retJSON });
+                        retJSON.Status = "false";
+                        retJSON.Message = "Redis connection problem";
+                        retJSON.insertId = "";
+                    } else {
+                        retJSON.Status = "true";
+                        retJSON.Message = "Success";
+                        retJSON.insertId = Guid;
+                    }
+                    return resolve(retJSON);
+                });
+            } catch (err) {
+                console.log('err', err);
+                retJSON.Status = "false";
+                retJSON.Message = err;
+                retJSON.insertId = "";
+                console.log({ details: "CreateSchema exception", error: err });
+                return resolve(retJSON);
+            }
+        });
     }
 
     SetupSearchIndex(Hash) {
@@ -966,7 +1021,7 @@ module.exports = class datalake {
                 if (this.RedisConnected) {
                     async.waterfall([
                         (callback) => {
-                            if (Guid) {
+                            if (Guid && this.flagLabel) {
                                 redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
                                     if (err) {
                                         return callback(err);
@@ -1778,7 +1833,14 @@ module.exports = class datalake {
 
                 async.waterfall([
                     (callback) => {
-                        this.dataInsert(VESShortCode, Guid ? Guid : uuid.v4(), Keyword, MetaData, Tag, Comment, Action, retJSON, callback);
+                        if(this.flagLabel) {
+                            this.CreateTPGUID(VESShortCode, Guid, callback);
+                        } else {
+                            return callback(null, Guid ? Guid : uuid.v4());
+                        }
+                    },
+                    (Guid, callback) => {
+                        this.dataInsert(VESShortCode, Guid, Keyword, MetaData, Tag, Comment, Action, retJSON, callback);
                     }
                 ], (err, result) => {
                     if (err) {
@@ -1803,7 +1865,7 @@ module.exports = class datalake {
         var finalResult = [];
         async.waterfall([
             (callback) => {
-                if (Guid) {
+                if (Guid && this.flagLabel) {
                     redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
                         if (err) {
                             return callback(err);
