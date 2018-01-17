@@ -33,6 +33,7 @@ module.exports = class datalake {
                     console.log("Redis db " + ConnectionObj.dbname + " selected");
                     redisClient = client;
                     this.RedisConnected = true;
+                    this.flagLabel = ConnectionObj.flagLabel === false ? false : true;
                     return resolve();
                 });
             });
@@ -41,6 +42,7 @@ module.exports = class datalake {
     }
     CloseConnection() {
         redisClient.quit();
+        this.flagLabel = false;
         this.RedisConnected = false;
     }
     ListSchemas() {
@@ -48,18 +50,30 @@ module.exports = class datalake {
             var retJSON = {};
             try {
                 if (this.RedisConnected) {
-                    redisClient.keys("Master:*", (err, res) => {
-                        if (err) {
-                            retJSON.Status = 'false';
-                            retJSON.Message = err;
+                    if (!this.flagLabel) {
+                        return resolve({ Status: "false", Message: "This is function is depricated due to your redis connection type with flagLabel = false" });
+                    }
+                    redisClient.hlen("Index", (err, count) => {
+                        redisClient.hscan("Index", 0, 'MATCH', '*', 'count', count, (err, res) => {
+                            if (err) {
+                                retJSON.Status = 'false';
+                                retJSON.Message = err;
+                                return resolve(retJSON);
+                            }
+                            retJSON.Status = 'true';
+                            retJSON.Message = 'Success';
+                            retJSON.Count = '';
+                            retJSON.items = [];
+                            for (const item in res[1]) {
+                                if (item % 2 === 0) { // index is even
+                                    retJSON.items = retJSON.items.concat(res[1][item]);
+                                }
+                            }
+                            retJSON.Count = retJSON.items.length;
+                            retJSON.items = retJSON.items.sort()
                             return resolve(retJSON);
-                        }
-                        retJSON.Status = 'true';
-                        retJSON.Message = 'Success';
-                        retJSON.items = res.toString().replace(/Master:/g, "").
-                            split(',');
-                        return resolve(retJSON);
-                    });
+                        });
+                    })
                 } else {
                     retJSON.Status = 'false';
                     retJSON.Message = 'Redis not Connected';
@@ -144,22 +158,6 @@ module.exports = class datalake {
         });
     }
 
-    CreateTPGUID(VESShortCode, Guid, callback) {
-        var myUUID = Guid ? Guid : uuid.v4();
-        try {
-            if (this.RedisConnected) {
-                redisClient.sadd('Master:' + VESShortCode, myUUID);
-            } else {
-                console.log({ details: 'CreateTPGUID', error: 'Redis connection problem' });
-                return callback({ error: 'Redis connection problem' });
-            }
-            return callback(null, myUUID);
-        } catch (err) {
-            console.log({ details: 'CreateTPGUID exception', error: err });
-            return callback(null, myUUID);
-        }
-    }
-
     getPayloadData(request) {
         try {
             var payloadStr = request;
@@ -181,45 +179,10 @@ module.exports = class datalake {
         }
     }
 
-    CreateSchema(postData) {
-        return new Promise((resolve, reject) => {
-            var retJSON = {};
-            try {
-                var payload = this.getPayloadData(postData);
-
-                if (!payload.VESShortCode) {
-                    return reject({ Status: false, Message: 'Invalid Postdata' });
-                }
-
-                this.CreateTPGUID(payload.VESShortCode, payload.Guid ? payload.Guid : null, (err, Guid) => {
-                    if (err) {
-                        console.log('redis not connected');
-                        console.log({ details: "CreateSchema", error: retJSON });
-                        retJSON.Status = "false";
-                        retJSON.Message = "Redis connection problem";
-                        retJSON.insertId = "";
-                    } else {
-                        retJSON.Status = "true";
-                        retJSON.Message = "Success";
-                        retJSON.insertId = Guid;
-                    }
-                    return resolve(retJSON);
-                });
-            } catch (err) {
-                console.log('err', err);
-                retJSON.Status = "false";
-                retJSON.Message = err;
-                retJSON.insertId = "";
-                console.log({ details: "CreateSchema exception", error: err });
-                return resolve(retJSON);
-            }
-        });
-    }
-
-    SetupSearchIndex(VESShortCode, Keyword, ShortCodes) {
+    SetupSearchIndex(Hash) {
         try {
             if (this.RedisConnected) {
-                redisClient.hset("Index:" + VESShortCode, Keyword, ShortCodes);
+                redisClient.hset(Hash[0], Hash[1], Hash[2]);
             } else {
                 console.log({ details: "SetupSearchIndex", error: "Redis connection problem" });
             }
@@ -237,10 +200,16 @@ module.exports = class datalake {
                 if (!payload.ShortCodes) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
                 }
+                if (this.flagLabel && !payload.Keyword) {
+                    retJSON.Status = "false";
+                    retJSON.Message = "Missing manditory keys Keyword";
+                    return resolve(retJSON);
+                }
 
                 if (this.RedisConnected) {
                     var ShortCodes = (typeof (payload.ShortCodes) == "string") ? payload.ShortCodes : JSON.stringify(payload.ShortCodes);
-                    this.SetupSearchIndex(payload.VESShortCode, payload.Keyword, ShortCodes);
+                    const Hash = this.flagLabel ? ["Index:" + payload.VESShortCode, payload.Keyword, ShortCodes] : ["Index", payload.VESShortCode, ShortCodes]
+                    this.SetupSearchIndex(Hash);
                     retJSON.Status = "true";
                     retJSON.Message = "Success";
                 } else {
@@ -261,16 +230,19 @@ module.exports = class datalake {
     addRedisData(type, VESShortCode, Keyword, ShortCode, Value, Guid) {
         try {
             if (type == "string") {
-                redisClient.sadd("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
+                const SetAdd = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode + ":" + Value, Guid];
+                redisClient.sadd(SetAdd[0], SetAdd[1]);
             } else if (type == "integer" && !(isNaN(Value))) {
-                redisClient.zadd("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Value, Guid);
+                const zSetAdd = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Value, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, Value, Guid]
+                redisClient.zadd(zSetAdd[0], zSetAdd[1], zSetAdd[2]);
             } else if (type == "date") {
                 var dateValue = new Date(Value);
                 dateValue = dateValue.toLocaleString();
                 dateValue = dateValue.replace(/[^\w\s]/g, '').replace(/ /g, '').
                     replace(/AM/g, '000');
                 if (!(isNaN(dateValue))) {
-                    redisClient.zadd("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, dateValue, Guid);
+                    const zSetAdd = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, dateValue, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, dateValue, Guid];
+                    redisClient.zadd(zSetAdd[0], zSetAdd[1], zSetAdd[2]);
                 }
             }
         } catch (err) {
@@ -295,9 +267,11 @@ module.exports = class datalake {
                                         for (const eachOldProperty of oldMetaData[Metakey]) {
                                             if (eachProperty != eachOldProperty) {
                                                 if (type == "string") {
-                                                    redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + eachOldProperty.trim(), Guid);
+                                                    const SetRemove = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + eachOldProperty.trim(), Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode + ":" + eachOldProperty.trim(), Guid];
+                                                    redisClient.srem(SetRemove[0], SetRemove[1]);
                                                 } else if (type == "integer" || type == "date") {
-                                                    redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                                    const SetRemove = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, Guid];
+                                                    redisClient.zrem(SetRemove[0], SetRemove[1]);
                                                 }
                                                 self.addRedisData(type, VESShortCode, Keyword, ShortCode, eachProperty.trim(), Guid);
                                             }
@@ -319,9 +293,11 @@ module.exports = class datalake {
                                         if (OldMeta == ShortCode) {
                                             if (MetaData[Metakey].trim() != oldMetaData[OldMeta].trim()) {
                                                 if (type == "string") {
-                                                    redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + oldMetaData[OldMeta].trim(), Guid);
+                                                    const SetRemove = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + oldMetaData[OldMeta].trim(), Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode + ":" + oldMetaData[OldMeta].trim(), Guid];
+                                                    redisClient.srem(SetRemove[0], SetRemove[1]);
                                                 } else if (type == "integer" || type == "date") {
-                                                    redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                                    const SetRemove = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, Guid];
+                                                    redisClient.zrem(SetRemove[0], SetRemove[1]);
                                                 }
                                                 self.addRedisData(type, VESShortCode, Keyword, ShortCode, MetaData[Metakey].trim(), Guid);
                                             }
@@ -337,9 +313,11 @@ module.exports = class datalake {
                             traverse(oldMetaData).forEach(function (OldValue) {
                                 if (this.key != "undefined" && this.key == ShortCode) {
                                     if (type == "string") {
-                                        redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid);
+                                        const SetRemove = self.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode + ":" + OldValue.trim(), Guid];
+                                        redisClient.srem(SetRemove[0], SetRemove[1]);
                                     } else if (type == "integer" || type == "date") {
-                                        redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                        const SetRemove = self.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, Guid];
+                                        redisClient.zrem();
                                     }
                                 }
                             });
@@ -367,9 +345,9 @@ module.exports = class datalake {
             } else {
                 missingMandatoryKeys = (missingMandatoryKeys == "" ? "VESShortCode" : missingMandatoryKeys + ", VESShortCode");
             }
-            if (_Keyword) {
+            if (this.flagLabel && _Keyword) {
                 Keyword = _Keyword.toString();
-            } else {
+            } else if (this.flagLabel) {
                 missingMandatoryKeys = (missingMandatoryKeys == "" ? "Keyword" : missingMandatoryKeys + ", Keyword");
             }
             if (_MetaData) {
@@ -386,19 +364,8 @@ module.exports = class datalake {
             if (this.RedisConnected) {
                 async.waterfall([
                     (callback) => {
-                        redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
-                            if (err) {
-                                console.log({ details: "populateSearchIndex sismember", error: err });
-                                return callback(err);
-                            }
-                            if (res) {
-                                return callback(null);
-                            }
-                            return callback('Posted Guid not found in TpSchemaSet/' + VESShortCode);
-                        });
-                    },
-                    (callback) => {
-                        redisClient.hget("Index:" + VESShortCode, Keyword, (err, res) => {
+                        const Hash = this.flagLabel ? ["Index:" + VESShortCode, Keyword] : ["Index", VESShortCode]
+                        redisClient.hget(Hash[0], Hash[1], (err, res) => {
                             var response = '';
                             if (err) {
                                 console.log({ details: "populateSearchIndex hget", error: err });
@@ -427,12 +394,14 @@ module.exports = class datalake {
                             return callback(null);
                         } else { //eslint-disable-line
                             var oldMetaData = "";
-                            redisClient.hget("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
+                            const GetHash = this.flagLabel ? ["Data:" + VESShortCode + ":" + Guid, Keyword] : ["Data:" + VESShortCode, Guid]
+                            redisClient.hget(GetHash[0], GetHash[1], (err, res) => {
                                 if (err) {
                                     console.log({ details: "populateSearchIndex hget", error: err });
                                     return callback(err);
                                 }
-                                redisClient.hset("Data:" + VESShortCode + ":" + Guid, Keyword, MetaData);
+                                const SetHash = this.flagLabel ? ["Data:" + VESShortCode + ":" + Guid, Keyword, MetaData] : ["Data:" + VESShortCode, Guid, MetaData];
+                                redisClient.hset(SetHash[0], SetHash[1], SetHash[2]);
                                 try {
                                     MetaData = (typeof (MetaData) == "string") ? JSON.parse(MetaData) : MetaData;
                                 } catch (exp) {
@@ -474,7 +443,8 @@ module.exports = class datalake {
 
     dataInsert(VESShortCode, Guid, Keyword, MetaData, Tag, Comment, Action, retJSON, callback) {
         try {
-            this.getHash('Data:' + VESShortCode + ':' + Guid, Keyword, (err, response) => {
+            const get = this.flagLabel ? ['Data:' + VESShortCode + ':' + Guid, Keyword] : ['Data:' + VESShortCode, Guid];
+            this.getHash(get[0], get[1], (err, response) => {
                 if (err == 'Hash Key not found in Redis') {
                     this.populateSearchIndex(VESShortCode, Guid, Keyword, MetaData, null, (err) => {
                         if (err) {
@@ -727,8 +697,8 @@ module.exports = class datalake {
         try {
             var items = [];
             async.forEachOf(GuidList, (Guid, i, callback) => {
-                var Hash = "Data:" + VESShortCode + ":" + Guid;
-                this.getHash(Hash, Keyword, (err, response) => {
+                const Hash = this.flagLabel ? "Data:" + VESShortCode + ":" + Guid : "Data:" + VESShortCode;
+                this.getHash(Hash, this.flagLabel ? Keyword : Guid, (err, response) => {
                     if (err) {
                         console.log({ details: "getSearchData Error", error: err });
                         return callback(err);
@@ -760,8 +730,10 @@ module.exports = class datalake {
             var SearchLOVScore = [];
             async.waterfall([
                 (callback) => {
-                    if (Keyword) {
+                    if (this.flagLabel && Keyword) {
                         this.getHash("Index:" + VESShortCode, Keyword, callback);
+                    } else if (!this.flagLabel) {
+                        this.getHash("Index", VESShortCode, callback);
                     } else {
                         return callback('Keyword is missing..');
                     }
@@ -789,12 +761,18 @@ module.exports = class datalake {
                                             var LOV = SearchValue.split(',');
                                             var lovKey = '';
                                             for (let j = 0; j < LOV.length; j++) {
-                                                lovKey += "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + LOV[j].toString().trim() + ',';
+                                                if (this.flagLabel) {
+                                                    lovKey += "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + LOV[j].toString().trim() + ',';
+                                                } else {
+                                                    lovKey += "{SearchIndex}." + VESShortCode + ":" + SearchShortCode.trim() + ":" + LOV[j].toString().trim() + ',';
+                                                }
                                             }
                                             lovKey = lovKey.slice(0, -1);
                                             SearchLOVString.push(lovKey);
                                         } else {
-                                            Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + SearchValue.trim();
+                                            Search = this.flagLabel ?
+                                                "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode.trim() + ":" + SearchValue.trim() :
+                                                "{SearchIndex}." + VESShortCode + ":" + SearchShortCode.trim() + ":" + SearchValue.trim();
                                             SearchListString.push(Search);
                                         }
                                     } else if (type == "integer") {
@@ -802,16 +780,22 @@ module.exports = class datalake {
                                             const LOVScore = SearchValue.split(',');
                                             const LOVScoreInternal = [];
                                             for (let j = 0; j < LOVScore.length; j++) {
-                                                const lovKeyScore = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + LOVScore[j].trim() + "," + LOVScore[j].trim();
+                                                const lovKeyScore = this.flagLabel ?
+                                                    "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + LOVScore[j].trim() + "," + LOVScore[j].trim() :
+                                                    "{SearchIndex}." + VESShortCode + ":" + SearchShortCode + "," + LOVScore[j].trim() + "," + LOVScore[j].trim();
                                                 LOVScoreInternal.push(lovKeyScore);
                                             }
                                             SearchLOVScore.push(LOVScoreInternal);
                                         } else {
                                             const Values = SearchValue.split('~');
                                             if (Values.length > 1) {
-                                                Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[1].trim();
+                                                Search = this.flagLabel ?
+                                                    "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[1].trim() :
+                                                    "{SearchIndex}." + VESShortCode + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[1].trim();
                                             } else {
-                                                Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[0].trim();
+                                                Search = this.flagLabel ?
+                                                    "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[0].trim() :
+                                                    "{SearchIndex}." + VESShortCode + ":" + SearchShortCode + "," + Values[0].trim() + "," + Values[0].trim();
                                             }
                                             SearchListScore.push(Search);
                                         }
@@ -821,7 +805,9 @@ module.exports = class datalake {
                                             var LOVScoreInternal = [];
                                             for (var j = 0; j < LOVScore.length; j++) {
                                                 var searchDT = this.formatDate(LOVScore[j]);
-                                                var lovKeyScore = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + searchDT.trim() + "," + searchDT.trim();
+                                                var lovKeyScore = this.flagLabel ?
+                                                    "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + searchDT.trim() + "," + searchDT.trim() :
+                                                    "{SearchIndex}." + VESShortCode + ":" + SearchShortCode + "," + searchDT.trim() + "," + searchDT.trim();
                                                 LOVScoreInternal.push(lovKeyScore);
                                             }
                                             SearchLOVScore.push(LOVScoreInternal);
@@ -830,9 +816,13 @@ module.exports = class datalake {
                                             var fromDate = this.formatDate(Values[0]);
                                             if (Values.length > 1) {
                                                 var toDate = this.formatDate(Values[1]);
-                                                Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + toDate.trim();
+                                                Search = this.flagLabel ?
+                                                    "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + toDate.trim() :
+                                                    "{SearchIndex}." + VESShortCode + ":" + SearchShortCode + "," + fromDate.trim() + "," + toDate.trim();
                                             } else {
-                                                Search = "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + fromDate.trim();
+                                                Search = this.flagLabel ?
+                                                    "{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + SearchShortCode + "," + fromDate.trim() + "," + fromDate.trim() :
+                                                    "{SearchIndex}." + VESShortCode + ":" + SearchShortCode + "," + fromDate.trim() + "," + fromDate.trim();
                                             }
                                             SearchListScore.push(Search);
                                         }
@@ -969,6 +959,9 @@ module.exports = class datalake {
                     console.log({ details: "GetAllSchemaData missingMandatoryKeys", error: missingMandatoryKeys });
                     return resolve(retJSON);
                 }
+                if (!this.flagLabel) {
+                    return resolve({ Status: "false", Message: "This is function is depricated due to your redis connection type with flagLabel = false" });
+                }
 
                 if (this.RedisConnected) {
                     async.waterfall([
@@ -984,15 +977,7 @@ module.exports = class datalake {
                                     return callback('Posted VESShortCode not found in TpSchemaSet');
                                 });
                             } else {
-                                redisClient.smembers("Master:" + VESShortCode, (err, res) => {
-                                    if (err) {
-                                        return callback(err);
-                                    }
-                                    if (res) {
-                                        return callback(null, res);
-                                    }
-                                    return callback('Posted VESShortCode not found in TpSchemaSet');
-                                });
+                                this.sscanSearch(VESShortCode, [], 0, callback);
                             }
                         },
                         (GuidList, callback) => {
@@ -1078,7 +1063,8 @@ module.exports = class datalake {
             if (this.RedisConnected) {
                 async.waterfall([
                     (callback) => {
-                        this.getHashAll("Data:" + VESShortCode + ":" + Guid, (err, res) => {
+                        const GetAllHash = this.flagLabel ? ["Data:" + VESShortCode + ":" + Guid] : ["Data:" + VESShortCode]
+                        this.getHashAll(GetAllHash[0], (err, res) => {
                             if (err) {
                                 console.log({ details: "snapShotVESData:getHashAll:Error", error: err });
                                 return callback(err);
@@ -1587,8 +1573,6 @@ module.exports = class datalake {
                 var missingMandatoryKeys = "";
                 if (payload.Keyword) {
                     Keyword = payload.Keyword.toString();
-                } else {
-                    missingMandatoryKeys = "Keyword";
                 }
                 if (payload.VESShortCode) {
                     VESShortCode = payload.VESShortCode.toString();
@@ -1602,7 +1586,8 @@ module.exports = class datalake {
                     return reject(retJSON);
                 }
 
-                this.getHash("Index:" + VESShortCode, Keyword, (err, res) => {
+                const Hash = this.flagLabel ? ["Index:" + VESShortCode, Keyword] : ["Index", VESShortCode];
+                this.getHash(Hash[0], Hash[1], (err, res) => {
                     if (err) {
                         retJSON.Status = "false";
                         retJSON.Message = err;
@@ -1768,9 +1753,9 @@ module.exports = class datalake {
                 } else {
                     missingMandatoryKeys = (missingMandatoryKeys == "" ? "VESShortCode" : missingMandatoryKeys + ", VESShortCode");
                 }
-                if (payload.Keyword) {
+                if (this.flagLabel && payload.Keyword) {
                     Keyword = payload.Keyword.toString().trim();
-                } else {
+                } else if (this.flagLabel) {
                     missingMandatoryKeys = (missingMandatoryKeys == "" ? "Keyword" : missingMandatoryKeys + ", Keyword");
                 }
                 if (payload.MetaData) {
@@ -1793,10 +1778,7 @@ module.exports = class datalake {
 
                 async.waterfall([
                     (callback) => {
-                        this.CreateTPGUID(VESShortCode, Guid, callback);
-                    },
-                    (insertId, callback) => {
-                        this.dataInsert(VESShortCode, insertId, Keyword, MetaData, Tag, Comment, Action, retJSON, callback);
+                        this.dataInsert(VESShortCode, Guid ? Guid : uuid.v4(), Keyword, MetaData, Tag, Comment, Action, retJSON, callback);
                     }
                 ], (err, result) => {
                     if (err) {
@@ -2006,7 +1988,7 @@ module.exports = class datalake {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
                 }
                 const Schema = Array.isArray(payload.Schema) ? payload.Schema : [payload.Schema];
-                const Keyword = payload.Keyword ? payload.Keyword : 'Label';
+                const Keyword = payload.Keyword;
                 const Guid = payload.Guid ? payload.Guid : null;
                 var forDeletion = ['Schema', 'Keyword', 'Guid', 'recordFrom', 'recordUpto'];
                 var arr = Object.keys(payload).filter((item) => !forDeletion.includes(item));
@@ -2082,7 +2064,9 @@ module.exports = class datalake {
     getDistinctRecords(Payload) {
         return new Promise((resolve, reject) => {
             const RecordMoreThan = Payload.RecordMoreThan ? Payload.RecordMoreThan : 1000;
-            const Search = `{SearchIndex}.${Payload.VESShortCode}:${Payload.Keyword ? Payload.Keyword : 'Label'}:${Payload.ShortCode}:`;
+            const Search = this.flagLabel ?
+                `{SearchIndex}.${Payload.VESShortCode}:${Payload.Keyword ? Payload.Keyword : 'Label'}:${Payload.ShortCode}:` :
+                `{SearchIndex}.${Payload.VESShortCode}:${Payload.ShortCode}:`;
             const retJSON = {};
             let ResultArr = [];
             this.scanSearch(Search, ResultArr, 0, 10000).
@@ -2118,7 +2102,81 @@ module.exports = class datalake {
                 });
         });
     }
+    getSchemaRecordsBatch(VESShortCode, Keyword, Nextbatch, BATCHCOUNT, field) {
+        let finalResult = [];
+        return new Promise((resolve, reject) => {
+            if (this.flagLabel) {
+                redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', 'COUNT', BATCHCOUNT, (err, result) => {
+                    if (err) {
+                        console.log('err:', err);
+                        return reject(err);
+                    }
+                    async.forEachOf(result[1], (Guid, i, callback) => {
+                        this.getHash("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
+                            if (err) {
+                                console.log({ details: "getSchemaRecordsBatch:getHash:Error", error: err });
+                            } else {
+                                // console.log(JSON.parse(res));
+                                try {
+                                    finalResult = finalResult.concat(JSON.parse(res)[field]); // eslint-disable-line
+                                } catch (error) {
+                                    console.log(error);
+                                }
+                            }
+                            return callback(null);
+                        });
+                    }, (err) => {
+                        if (err) {
+                            console.log({ details: "GetAllSchemaData exception", error: err });
+                            return reject(err);
+                        }
+                        if (result[0] == 0) {
+                            return resolve([null, finalResult]);
+                        }
+                        return resolve([result[0], finalResult]);
+                    });
 
+                });
+            } else {
+                redisClient.hscan("Data:" + VESShortCode, Nextbatch, 'COUNT', BATCHCOUNT, (err, result) => {
+                    if (err) {
+                        console.log('err:', err);
+                        return reject(err);
+                    }
+                    let guidList = []
+                    for (const key in result[1]) {
+                        if (key % 2 === 0) {
+                            guidList = guidList.concat(result[1][key]);
+                        }
+                    }
+                    async.forEachOf(guidList, (Guid, i, callback) => {
+                        this.getHash("Data:" + VESShortCode, Guid, (err, res) => {
+                            if (err) {
+                                console.log({ details: "getSchemaRecordsBatch:getHash:Error", error: err });
+                            } else {
+                                // console.log(JSON.parse(res));
+                                try {
+                                    finalResult = finalResult.concat(JSON.parse(res)[field]); // eslint-disable-line
+                                } catch (error) {
+                                    console.log(error);
+                                }
+                            }
+                            return callback(null);
+                        });
+                    }, (err) => {
+                        if (err) {
+                            console.log({ details: "GetAllSchemaData exception", error: err });
+                            return reject(err);
+                        }
+                        if (result[0] == 0) {
+                            return resolve([null, finalResult]);
+                        }
+                        return resolve([result[0], finalResult]);
+                    });
+                })
+            }
+        });
+    }
     createConnection(Payload) {
         return new Promise((resolve, reject) => {
             console.error('use CreateConnection(), createConnection() is depricated');

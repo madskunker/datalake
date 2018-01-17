@@ -41,6 +41,7 @@ const dl = new datalake();
 | 18 | [SnapshotTidalPoolData](#snapshottidalpooldata) | It Creates Backup copy of given Guid, Schema Name. |
 | 19 | [RemoveTidalPoolData](#removetidalpooldata) | It Creates Backup copy of given Guid, Schema Name and Removes Key-value pair from the Schema. |
 | 20 | [RollbackTidalPoolData](#rollbacktidalpooldata) | It Creates Backup copy of current Key-Value pair for the Given Guid-Schema and Replaces old Key-Value pair from Archive. |
+| 21 | [Search](#search) | Search |
 
 _Function Names are Renamed in v1.3.4, Please Read below Table for new function name_
 
@@ -66,6 +67,7 @@ _Function Names are Renamed in v1.3.4, Please Read below Table for new function 
 | 18 | [showStatus](#showstatus) | ShowConnectionStatus |
 | 19 | [SnapshotTidalPoolData](#snapshottidalpooldata) | CreateBackupData |
 | 20 | [UpdateTidalPoolHash](#updatetidalpoolhash) | RefreshSchemaSearchIndex |
+| 21 | [Search](#search) | Search |
 ## Methods
 
 -----------------------------------------
