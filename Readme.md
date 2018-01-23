@@ -21,26 +21,26 @@ const dl = new datalake();
 
 | S.No | Method Name | Description |
 | ---- | ----------- | ----------- |
-| 1  | [createConnection](#createconnection) | This will Create Redis Connection pool object. |
-| 2  | [closeConnection](#closeconnection) | This will close already created Redis connection pool if any. |
-| 3  | [showStatus](#showstatus) | Returns the Status of Redis connection |
-| 4  | [SetupSearchHash](#setupsearchhash) | Defining Redis Schema index keys |
+| 1  | [CreateConnection](#createconnection) | This will Create Redis Connection pool object. |
+| 2  | [CloseConnection](#closeconnection) | This will close already created Redis connection pool if any. |
+| 3  | [ShowConnectionStatus](#showstatus) | Returns the Status of Redis connection |
+| 4  | [ConfigureSearchIndex](#setupsearchhash) | Defining Redis Schema index keys |
 | 5  | [InsertTidalPoolSchema](#inserttidalpoolschema) | This will Create new Schema |
 | 6  | [InsertTPData](#inserttpdata) | This will insert Key value pair against the Schema given |
 | 7  | [InsertData](#insertdata) | This will insert Key value pair against the Schema given, if Schema is not found, automatically will create new Schema and insert the key value pair against the newly created schema |
-| 8  | [GetTidalPoolSchema](#gettidalpoolschema) | This will search records for given Keyword, Schema and returns all Key-value pair available in the schema. Result can be filtered with particular Guid |
-| 9  | [SearchTidalPoolHash](#searchtidalpoolhash) | This will search record for given PropertyField, PropertyValue, Keyword and SchemaName including comma(,) separated PropertyValues and range of PropertyValue |
-| 10 | [GetDatafromSchemas](#getdatafromschemas) | This Method is the combination of GetSearchHashSchema, GetTidalPoolSchema, and SearchTidalPoolHash. This will search the records for given PropertyField, PropertyValue, Keyword and SchemaName. Multi-value search of records using comma(,) separated list of PropertyValue(s) or range between the PropertyValue(s) or it can be filtered with particular Guid. **It can also performs multiple comma(,) separated Schema Name search**. |
-| 11 | [GetSchemaList](#getschemalist) | GetSchemaList will return list of Schema Names available in the Selected Redis DB. |
-| 12 | [GetSearchHashSchema](#getsearchhashschema) | This will return the defined Redis Schema index keys for the given Schema Name. |
-| 13 | [GetTpSearchHash](#gettpsearchhash) | This will return the defined Redis Schema index keys for the given Schema Name. |
-| 14 | [SetKeyData](#setkeydata) | Set cache data into the Redis DB for the given key-value pair with TTL(Time to live) provided. _If TTL(Time to live) not provided, it will set cache data as permanent data._ |
-| 15 | [GetKeyData](#getkeydata) | Get the value from cache memory for given search key before the TTL(Time to live) expires|
-| 16 | [RefreshTidalPoolData](#refreshtidalpooldata) | Refresh/Re-Build all the search index for the given Schema Name |
-| 17 | [UpdateTidalPoolHash](#updatetidalpoolhash) | Refresh/Re-Build particular search index for the given Guid, Schema Name. |
-| 18 | [SnapshotTidalPoolData](#snapshottidalpooldata) | It Creates Backup copy of given Guid, Schema Name. |
-| 19 | [RemoveTidalPoolData](#removetidalpooldata) | It Creates Backup copy of given Guid, Schema Name and Removes Key-value pair from the Schema. |
-| 20 | [RollbackTidalPoolData](#rollbacktidalpooldata) | It Creates Backup copy of current Key-Value pair for the Given Guid-Schema and Replaces old Key-Value pair from Archive. |
+| 8  | [GetAllSchemaData](#gettidalpoolschema) | This will search records for given Keyword, Schema and returns all Key-value pair available in the schema. Result can be filtered with particular Guid |
+| 9  | [SearchDataByProperty](#searchtidalpoolhash) | This will search record for given PropertyField, PropertyValue, Keyword and SchemaName including comma(,) separated PropertyValues and range of PropertyValue |
+| 10 | [SearchMultipleData](#getdatafromschemas) | This Method is the combination of GetSearchHashSchema, GetTidalPoolSchema, and SearchTidalPoolHash. This will search the records for given PropertyField, PropertyValue, Keyword and SchemaName. Multi-value search of records using comma(,) separated list of PropertyValue(s) or range between the PropertyValue(s) or it can be filtered with particular Guid. **It can also performs multiple comma(,) separated Schema Name search**. |
+| 11 | [ListSchemas](#getschemalist) | GetSchemaList will return list of Schema Names available in the Selected Redis DB. |
+| 12 | [ListSearchIndex](#getsearchhashschema) | This will return the defined Redis Schema index keys for the given Schema Name. |
+| 13 | [ListSearchIndex](#gettpsearchhash) | This will return the defined Redis Schema index keys for the given Schema Name. |
+| 14 | [SetCacheData](#setkeydata) | Set cache data into the Redis DB for the given key-value pair with TTL(Time to live) provided. _If TTL(Time to live) not provided, it will set cache data as permanent data._ |
+| 15 | [GetCacheData](#getkeydata) | Get the value from cache memory for given search key before the TTL(Time to live) expires|
+| 16 | [RefreshSchemaSearchIndex](#refreshtidalpooldata) | Refresh/Re-Build all the search index for the given Schema Name |
+| 17 | [RefreshSchemaSearchIndex](#updatetidalpoolhash) | Refresh/Re-Build particular search index for the given Guid, Schema Name. |
+| 18 | [CreateBackupData](#snapshottidalpooldata) | It Creates Backup copy of given Guid, Schema Name. |
+| 19 | [RemoveData](#removetidalpooldata) | It Creates Backup copy of given Guid, Schema Name and Removes Key-value pair from the Schema. |
+| 20 | [RestoreData](#rollbacktidalpooldata) | It Creates Backup copy of current Key-Value pair for the Given Guid-Schema and Replaces old Key-Value pair from Archive. |
 | 21 | [Search](#search) | Search |
 
 _Function Names are Renamed in v1.3.4, Please Read below Table for new function name_
@@ -68,6 +68,7 @@ _Function Names are Renamed in v1.3.4, Please Read below Table for new function 
 | 19 | [SnapshotTidalPoolData](#snapshottidalpooldata) | CreateBackupData |
 | 20 | [UpdateTidalPoolHash](#updatetidalpoolhash) | RefreshSchemaSearchIndex |
 | 21 | [Search](#search) | Search |
+
 ## Methods
 
 -----------------------------------------

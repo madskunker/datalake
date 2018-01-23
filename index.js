@@ -12,39 +12,107 @@ const async = require("async");
 const conditional = require('async-if-else')({});
 const ByteBuffer = require("bytebuffer");
 
-let redisClient = {};
+let connectionArray = [];
+let connectionCredentials = {};
 
 module.exports = class datalake {
     constructor() {
         this.RedisConnected = false;
+        this.maxConnection = 0;
+        this.ConnectionInUse = 0;
     }
-    CreateConnection(ConnectionObj) {
+
+    CreatePoolConnections(ConnectionObj) {
         return new Promise((resolve, reject) => {
-            let client = {};
+            try {
+                connectionArray = [];
+                this.maxConnection = ConnectionObj.maxConnection ? parseInt(ConnectionObj.maxConnection, 0) : 10;
+                let conn = 0;
+                connectionCredentials = ConnectionObj;
+                async.whilst(
+                    () => {
+                        return conn < this.maxConnection;
+                    },
+                    (callback) => {
+                        connectionArray = connectionArray.concat(redis.createClient(ConnectionObj));
 
-            if (!ConnectionObj) {
-                return reject({ Status: false, Message: 'No Connection Object Found' });
+                        connectionArray[conn].on('connect', () => {
+                            console.log("redis Connected");
+
+                            connectionArray[conn].select(ConnectionObj.dbname, () => {
+                                console.log("Redis db " + ConnectionObj.dbname + " selected");
+                                conn++;
+                                return callback(null);
+                            });
+                        });
+                        connectionArray[conn].on('error', (err) => {
+                            console.log(err);
+                            return callback(err);
+                        });
+                    },
+                    (err) => {
+                        if (err) {
+                            console.log(err);
+                            return reject(err);
+                        }
+                        this.RedisConnected = true;
+                        this.flagLabel = ConnectionObj.flagLabel === false ? false : true;
+                        return resolve();
+                    }
+                );
+            } catch (error) {
+                console.log(error);
             }
-            client = redis.createClient(ConnectionObj);
-            client.on('connect', () => {
-                console.log("redis Connected");
-
-                client.select(ConnectionObj.dbname, () => {
-                    console.log("Redis db " + ConnectionObj.dbname + " selected");
-                    redisClient = client;
-                    this.RedisConnected = true;
-                    this.flagLabel = ConnectionObj.flagLabel === false ? false : true;
-                    return resolve();
-                });
-            });
-            client.on('error', (err) => reject(err));
         });
     }
-    CloseConnection() {
-        redisClient.quit();
-        this.flagLabel = false;
-        this.RedisConnected = false;
+
+    getConnection(iteration) {
+        return new Promise((resolve, reject) => {
+            try {
+                if (this.ConnectionInUse >= parseInt(this.maxConnection, 0) - 1) {
+                    this.ConnectionInUse = 0;
+                }
+                iteration = iteration ? iteration : 0;
+                this.ConnectionInUse++;
+                if (connectionArray[this.ConnectionInUse].connected) {
+                    return resolve(connectionArray[this.ConnectionInUse]);
+                } else if (iteration <= this.maxConnection) {
+                    this.ConnectionInUse++;
+                    iteration = iteration + 1;
+                    return resolve(this.redisClient(iteration));
+                } else {
+                    connectionArray = [];
+                    this.CreatePoolConnections(connectionCredentials).
+                        then(() => resolve(this.getConnection())).
+                        catch((err) => reject(err));
+                }
+            } catch (error) {
+                console.log(error);
+                this.RedisConnected = false;
+                return reject(error);
+            }
+        })
     }
+
+    CreateConnection(ConnectionObj) {
+        return new Promise((resolve, reject) => {
+            this.CreatePoolConnections(ConnectionObj).
+                then(() => resolve()).
+                catch((err) => reject(err));
+        });
+    }
+
+    CloseConnection() {
+        async.forEachOf(connectionArray, (connections, key, callback) => {
+            connections.quit();
+            return callback(null);
+        }, () => {
+            connectionArray = [];
+            // this.flagLabel = false;
+            this.RedisConnected = false;
+        })
+    }
+
     ListSchemas() {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -53,8 +121,8 @@ module.exports = class datalake {
                     if (!this.flagLabel) {
                         return resolve({ Status: "false", Message: "This is function is depricated due to your redis connection type with flagLabel = false" });
                     }
-                    redisClient.hlen("Index", (err, count) => {
-                        redisClient.hscan("Index", 0, 'MATCH', '*', 'count', count, (err, res) => {
+                    this.getConnection().then((redisClient) => redisClient.hlen("Index", (err, count) => {
+                        this.getConnection().then((redisClient) => redisClient.hscan("Index", 0, 'MATCH', '*', 'count', count, (err, res) => {
                             if (err) {
                                 retJSON.Status = 'false';
                                 retJSON.Message = err;
@@ -72,8 +140,8 @@ module.exports = class datalake {
                             retJSON.Count = retJSON.items.length;
                             retJSON.items = retJSON.items.sort()
                             return resolve(retJSON);
-                        });
-                    })
+                        }));
+                    }))
                 } else {
                     retJSON.Status = 'false';
                     retJSON.Message = 'Redis not Connected';
@@ -96,8 +164,8 @@ module.exports = class datalake {
                     var Key = postData ? postData.Key : '';
                     var Data = postData ? postData.Data.toString().trim() : '';
                     var TimeOut = postData ? postData.TimeOut : 10;
-                    redisClient.HSET(Schema, Key, Data);
-                    redisClient.EXPIRE(Schema, TimeOut);
+                    this.getConnection().then((redisClient) => redisClient.HSET(Schema, Key, Data));
+                    this.getConnection().then((redisClient) => redisClient.EXPIRE(Schema, TimeOut));
                     retJSON.Status = 'true';
                     retJSON.Message = 'Success';
                     return resolve(retJSON);
@@ -117,7 +185,7 @@ module.exports = class datalake {
             try {
                 var Hash = postData ? postData.Schema : '';
                 if (this.RedisConnected) {
-                    redisClient.hgetall(Hash, (err, response) => {
+                    this.getConnection().then((redisClient) => redisClient.hgetall(Hash, (err, response) => {
                         if (err) {
                             retJSON.Status = 'false';
                             retJSON.Message = err;
@@ -133,7 +201,7 @@ module.exports = class datalake {
                             return resolve(retJSON);
                         }
                         return resolve('Hash not found in Redis');
-                    });
+                    }));
                 }
             } catch (error) {
                 console.log(error);
@@ -147,7 +215,7 @@ module.exports = class datalake {
         return new Promise((resolve, reject) => {
             if (this.RedisConnected) {
                 return resolve({
-                    Status: 'TP Redis Module Loaded and Ready to Rock and Roll...',
+                    Status: 'Redis Module Loaded and Ready to Rock and Roll...',
                     Message: 'DataLake - Licensed by SkunkworxLab, LLC.'
                 });
             }
@@ -162,18 +230,19 @@ module.exports = class datalake {
         var myUUID = Guid ? Guid : uuid.v4();
         try {
             if (this.RedisConnected) {
-                redisClient.sadd('Master:' + VESShortCode, myUUID);
+                this.getConnection().then((redisClient) => redisClient.sadd('Master:' + VESShortCode, myUUID, (err, result) => {
+                    return callback(null, myUUID);
+                }));
             } else {
                 console.log({ details: 'CreateTPGUID', error: 'Redis connection problem' });
                 return callback({ error: 'Redis connection problem' });
             }
-            return callback(null, myUUID);
         } catch (err) {
             console.log({ details: 'CreateTPGUID exception', error: err });
             return callback(null, myUUID);
         }
     }
-    
+
     getPayloadData(request) {
         try {
             var payloadStr = request;
@@ -237,7 +306,7 @@ module.exports = class datalake {
     SetupSearchIndex(Hash) {
         try {
             if (this.RedisConnected) {
-                redisClient.hset(Hash[0], Hash[1], Hash[2]);
+                this.getConnection().then((redisClient) => redisClient.hset(Hash[0], Hash[1], Hash[2]));
             } else {
                 console.log({ details: "SetupSearchIndex", error: "Redis connection problem" });
             }
@@ -286,10 +355,10 @@ module.exports = class datalake {
         try {
             if (type == "string") {
                 const SetAdd = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode + ":" + Value, Guid];
-                redisClient.sadd(SetAdd[0], SetAdd[1]);
+                this.getConnection().then((redisClient) => redisClient.sadd(SetAdd[0], SetAdd[1]));
             } else if (type == "integer" && !(isNaN(Value))) {
                 const zSetAdd = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Value, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, Value, Guid]
-                redisClient.zadd(zSetAdd[0], zSetAdd[1], zSetAdd[2]);
+                this.getConnection().then((redisClient) => redisClient.zadd(zSetAdd[0], zSetAdd[1], zSetAdd[2]));
             } else if (type == "date") {
                 var dateValue = new Date(Value);
                 dateValue = dateValue.toLocaleString();
@@ -297,7 +366,7 @@ module.exports = class datalake {
                     replace(/AM/g, '000');
                 if (!(isNaN(dateValue))) {
                     const zSetAdd = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, dateValue, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, dateValue, Guid];
-                    redisClient.zadd(zSetAdd[0], zSetAdd[1], zSetAdd[2]);
+                    this.getConnection().then((redisClient) => redisClient.zadd(zSetAdd[0], zSetAdd[1], zSetAdd[2]));
                 }
             }
         } catch (err) {
@@ -323,10 +392,10 @@ module.exports = class datalake {
                                             if (eachProperty != eachOldProperty) {
                                                 if (type == "string") {
                                                     const SetRemove = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + eachOldProperty.trim(), Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode + ":" + eachOldProperty.trim(), Guid];
-                                                    redisClient.srem(SetRemove[0], SetRemove[1]);
+                                                    this.getConnection().then((redisClient) => redisClient.srem(SetRemove[0], SetRemove[1]));
                                                 } else if (type == "integer" || type == "date") {
                                                     const SetRemove = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, Guid];
-                                                    redisClient.zrem(SetRemove[0], SetRemove[1]);
+                                                    this.getConnection().then((redisClient) => redisClient.zrem(SetRemove[0], SetRemove[1]));
                                                 }
                                                 self.addRedisData(type, VESShortCode, Keyword, ShortCode, eachProperty.trim(), Guid);
                                             }
@@ -349,10 +418,10 @@ module.exports = class datalake {
                                             if (MetaData[Metakey].trim() != oldMetaData[OldMeta].trim()) {
                                                 if (type == "string") {
                                                     const SetRemove = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + oldMetaData[OldMeta].trim(), Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode + ":" + oldMetaData[OldMeta].trim(), Guid];
-                                                    redisClient.srem(SetRemove[0], SetRemove[1]);
+                                                    this.getConnection().then((redisClient) => redisClient.srem(SetRemove[0], SetRemove[1]));
                                                 } else if (type == "integer" || type == "date") {
                                                     const SetRemove = this.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, Guid];
-                                                    redisClient.zrem(SetRemove[0], SetRemove[1]);
+                                                    this.getConnection().then((redisClient) => redisClient.zrem(SetRemove[0], SetRemove[1]));
                                                 }
                                                 self.addRedisData(type, VESShortCode, Keyword, ShortCode, MetaData[Metakey].trim(), Guid);
                                             }
@@ -369,10 +438,10 @@ module.exports = class datalake {
                                 if (this.key != "undefined" && this.key == ShortCode) {
                                     if (type == "string") {
                                         const SetRemove = self.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + OldValue.trim(), Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode + ":" + OldValue.trim(), Guid];
-                                        redisClient.srem(SetRemove[0], SetRemove[1]);
+                                        this.getConnection().then((redisClient) => redisClient.srem(SetRemove[0], SetRemove[1]));
                                     } else if (type == "integer" || type == "date") {
                                         const SetRemove = self.flagLabel ? ["{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid] : ["{SearchIndex}." + VESShortCode + ":" + ShortCode, Guid];
-                                        redisClient.zrem();
+                                        this.getConnection().then((redisClient) => redisClient.zrem());
                                     }
                                 }
                             });
@@ -420,7 +489,7 @@ module.exports = class datalake {
                 async.waterfall([
                     (callback) => {
                         const Hash = this.flagLabel ? ["Index:" + VESShortCode, Keyword] : ["Index", VESShortCode]
-                        redisClient.hget(Hash[0], Hash[1], (err, res) => {
+                        this.getConnection().then((redisClient) => redisClient.hget(Hash[0], Hash[1], (err, res) => {
                             var response = '';
                             if (err) {
                                 console.log({ details: "populateSearchIndex hget", error: err });
@@ -433,7 +502,7 @@ module.exports = class datalake {
                                 return callback(exp);
                             }
                             return callback(null, response);
-                        });
+                        }));
                     },
                     (searchHash, callback) => {
                         if (Type && Type == "Refresh") {
@@ -450,13 +519,13 @@ module.exports = class datalake {
                         } else { //eslint-disable-line
                             var oldMetaData = "";
                             const GetHash = this.flagLabel ? ["Data:" + VESShortCode + ":" + Guid, Keyword] : ["Data:" + VESShortCode, Guid]
-                            redisClient.hget(GetHash[0], GetHash[1], (err, res) => {
+                            this.getConnection().then((redisClient) => redisClient.hget(GetHash[0], GetHash[1], (err, res) => {
                                 if (err) {
                                     console.log({ details: "populateSearchIndex hget", error: err });
                                     return callback(err);
                                 }
                                 const SetHash = this.flagLabel ? ["Data:" + VESShortCode + ":" + Guid, Keyword, MetaData] : ["Data:" + VESShortCode, Guid, MetaData];
-                                redisClient.hset(SetHash[0], SetHash[1], SetHash[2]);
+                                this.getConnection().then((redisClient) => redisClient.hset(SetHash[0], SetHash[1], SetHash[2]));
                                 try {
                                     MetaData = (typeof (MetaData) == "string") ? JSON.parse(MetaData) : MetaData;
                                 } catch (exp) {
@@ -475,7 +544,7 @@ module.exports = class datalake {
                                     this.processMetaData(VESShortCode, Keyword, Guid, searchHash, MetaData, oldMetaData);
                                 }
                                 return callback(null);
-                            });
+                            }));
                         }
                     }
                 ], (err) => {
@@ -512,6 +581,8 @@ module.exports = class datalake {
                         }
                         return callback(null, retJSON);
                     });
+                } else {
+                    return callback(err);
                 }
                 if (response) {
                     this.snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, (err, res) => {
@@ -543,7 +614,7 @@ module.exports = class datalake {
     getHash(Hash, Key, callback) {
         try {
             if (this.RedisConnected) {
-                redisClient.hget(Hash, Key, (err, res) => {
+                this.getConnection().then((redisClient) => redisClient.hget(Hash, Key, (err, res) => {
                     if (err) {
                         return callback(err);
                     }
@@ -551,7 +622,7 @@ module.exports = class datalake {
                         return callback(null, res);
                     }
                     return callback('Hash Key not found in Redis', null);
-                });
+                }));
             } else {
                 return callback('Redis connection problem');
             }
@@ -582,7 +653,7 @@ module.exports = class datalake {
             async.parallel([
                 (callback) => {
                     if (SearchListString && SearchListString.length > 0) {
-                        redisClient.sinter(SearchListString, (err, res) => {
+                        this.getConnection().then((redisClient) => redisClient.sinter(SearchListString, (err, res) => {
                             hit1 = true;
                             if (err) {
                                 console.log({ details: "sinter Error", error: err });
@@ -592,7 +663,7 @@ module.exports = class datalake {
                                 return callback(null, res);
                             }
                             return callback('Hash Key not found in Redis');
-                        });
+                        }));
                     } else {
                         return callback(null);
                     }
@@ -601,7 +672,7 @@ module.exports = class datalake {
                     var ScoreResult = [];
                     async.forEachOf(SearchListScore, (ScoreCommand, i, callback) => {
                         var searchScoreCommand = ScoreCommand.split(',');
-                        redisClient.zrangebyscore(searchScoreCommand, (err, res) => {
+                        this.getConnection().then((redisClient) => redisClient.zrangebyscore(searchScoreCommand, (err, res) => {
                             hit2 = true;
                             if (err) {
                                 console.log({ details: "zrangebyscore Error", error: err });
@@ -615,7 +686,7 @@ module.exports = class datalake {
                                 }
                             }
                             return callback(null);
-                        });
+                        }));
 
                     }, (err) => {
                         if (err) {
@@ -658,7 +729,7 @@ module.exports = class datalake {
                     // var ScoreLOVResult = [];
                     async.forEachOf(SearchLOVString, (command, i, callback) => {
                         var searchCommand = command.split(',');
-                        redisClient.sunion(searchCommand, (err, res) => {
+                        this.getConnection().then((redisClient) => redisClient.sunion(searchCommand, (err, res) => {
                             hitfn1 = true;
                             if (err) {
                                 console.log({ details: "sunion Error", error: err });
@@ -672,7 +743,7 @@ module.exports = class datalake {
                                 }
                             }
                             return callback(null);
-                        });
+                        }));
                     }, (err) => {
                         if (err) {
                             console.log({ details: "sunion exception", error: err });
@@ -688,7 +759,7 @@ module.exports = class datalake {
                         var ScoreResult = [];
                         async.forEachOf(ScoreCommandList, (ScoreCommand, i, cb) => {
                             var ScoreList = ScoreCommand.split(',');
-                            redisClient.zrangebyscore(ScoreList, (err, res) => {
+                            this.getConnection().then((redisClient) => redisClient.zrangebyscore(ScoreList, (err, res) => {
                                 if (err) {
                                     console.log({ details: "zrangebyscore Error", error: err });
                                     return cb(err);
@@ -701,7 +772,7 @@ module.exports = class datalake {
                                     }
                                 }
                                 return cb(null);
-                            });
+                            }));
                         }, (err) => {
                             if (err) {
                                 console.log({ details: "zrangebyscore exception", error: err });
@@ -895,7 +966,9 @@ module.exports = class datalake {
                 }
             ], (err, result) => {
                 if (err) {
-                    return callback(err);
+                    console.log('SearchTPHash error', err);
+                    result = result ? result : [];
+                    // return callback(err);
                 }
                 if (resultArray.length == 0) {
                     resultArray[VESShortCode] = resultArray.concat(result);
@@ -948,7 +1021,7 @@ module.exports = class datalake {
     getHashAll(Hash, callback) {
         try {
             if (this.RedisConnected) {
-                redisClient.hgetall(Hash, (err, res) => {
+                this.getConnection().then((redisClient) => redisClient.hgetall(Hash, (err, res) => {
                     if (err) {
                         return callback(err);
                     }
@@ -956,7 +1029,7 @@ module.exports = class datalake {
                         return callback(null, res);
                     }
                     return callback('Hash not found in Redis');
-                });
+                }));
             } else {
                 return callback('Redis connection problem');
             }
@@ -967,7 +1040,7 @@ module.exports = class datalake {
     }
 
     sscanSearch(VESShortCode, finalResult, Nextbatch, callback) {
-        redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', (err, result) => {
+        this.getConnection().then((redisClient) => redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', (err, result) => {
             if (err) {
                 console.log('err:', err);
                 return callback(err);
@@ -979,7 +1052,7 @@ module.exports = class datalake {
                 return callback(null, finalResult);
             }
             this.sscanSearch(VESShortCode, finalResult, result[0], callback);
-        });
+        }));
     }
 
     GetAllSchemaData(postData) {
@@ -1022,7 +1095,7 @@ module.exports = class datalake {
                     async.waterfall([
                         (callback) => {
                             if (Guid && this.flagLabel) {
-                                redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
+                                this.getConnection().then((redisClient) => redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
                                     if (err) {
                                         return callback(err);
                                     }
@@ -1030,7 +1103,7 @@ module.exports = class datalake {
                                         return callback(null, [Guid]);
                                     }
                                     return callback('Posted VESShortCode not found in TpSchemaSet');
-                                });
+                                }));
                             } else {
                                 this.sscanSearch(VESShortCode, [], 0, callback);
                             }
@@ -1133,7 +1206,7 @@ module.exports = class datalake {
                         });
                     },
                     (DataHash, callback) => {
-                        redisClient.zrevrangebyscore("DataArchive:" + VESShortCode + ":" + Guid, '+inf', '-inf', 'WITHSCORES', 'LIMIT', '0', '1', (err, res) => {
+                        this.getConnection().then((redisClient) => redisClient.zrevrangebyscore("DataArchive:" + VESShortCode + ":" + Guid, '+inf', '-inf', 'WITHSCORES', 'LIMIT', '0', '1', (err, res) => {
                             if (err) {
                                 console.log({ details: "snapShotVESData:zrevrangebyscore:Error", error: err });
                                 return callback(err);
@@ -1148,12 +1221,12 @@ module.exports = class datalake {
                                 return callback(null, Version, DataHash);
                             }
                             return callback('Hash key not found in Redis');
-                        });
+                        }));
                     },
                     (Version, InDataHash, callback) => {
                         var DataHash = '';
                         DataHash = (typeof (InDataHash) == "string") ? InDataHash : JSON.stringify(InDataHash);
-                        redisClient.zadd("DataArchive:" + VESShortCode + ":" + Guid, Version, DataHash);
+                        this.getConnection().then((redisClient) => redisClient.zadd("DataArchive:" + VESShortCode + ":" + Guid, Version, DataHash));
                         return callback(null, Version);
                     }
                 ], (err, result) => {
@@ -1290,9 +1363,9 @@ module.exports = class datalake {
                                 traverse(MetaData).forEach(function (Value) {
                                     if (this.key != "undefined" && this.key == ShortCode) {
                                         if (type == "string") {
-                                            redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid);
+                                            this.getConnection().then((redisClient) => redisClient.srem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode + ":" + Value, Guid));
                                         } else if (type == "integer" || type == "date") {
-                                            redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid);
+                                            this.getConnection().then((redisClient) => redisClient.zrem("{SearchIndex}." + VESShortCode + ":" + Keyword + ":" + ShortCode, Guid));
                                         }
                                         this.stop();
                                     }
@@ -1365,7 +1438,7 @@ module.exports = class datalake {
                                     console.log({ details: "RemoveData:getHash:Error", error: err });
                                     return callback(err);
                                 } else if (res) {
-                                    redisClient.hdel("Data:" + VESShortCode + ":" + Guid, Keyword);
+                                    this.getConnection().then((redisClient) => redisClient.hdel("Data:" + VESShortCode + ":" + Guid, Keyword));
                                     return callback(null, res);
                                 }
                                 return callback('Hash key not found in Redis');
@@ -1403,7 +1476,7 @@ module.exports = class datalake {
     checkTPData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
         try {
             if (self.RedisConnected) {
-                redisClient.hgetall("Data:" + VESShortCode + ":" + Guid, (err, res) => {
+                self.getConnection().then((redisClient) => redisClient.hgetall("Data:" + VESShortCode + ":" + Guid, (err, res) => {
                     if (err) {
                         return callback(err);
                     }
@@ -1411,7 +1484,7 @@ module.exports = class datalake {
                         return callback(null, true);
                     }
                     return callback(null, false);
-                });
+                }));
             } else {
                 return callback('Redis connection problem');
             }
@@ -1463,7 +1536,7 @@ module.exports = class datalake {
                             console.log({ details: "RestoreData, snapShotTPData forEachOf Error", error: err });
                             return callback(err);
                         }
-                        redisClient.del("Data:" + VESShortCode + ":" + Guid);
+                        self.getConnection().then((redisClient) => redisClient.del("Data:" + VESShortCode + ":" + Guid));
                         return callback(null);
                     });
                 }
@@ -1484,7 +1557,7 @@ module.exports = class datalake {
         try {
             async.waterfall([
                 (callback) => {
-                    redisClient.zrangebyscore("DataArchive:" + VESShortCode + ":" + Guid, RollbackVersion, RollbackVersion, (err, res) => {
+                    this.getConnection().then((redisClient) => redisClient.zrangebyscore("DataArchive:" + VESShortCode + ":" + Guid, RollbackVersion, RollbackVersion, (err, res) => {
                         if (err) {
                             console.log({ details: "RestoreData zrangebyscore Error", error: err });
                             return callback(err);
@@ -1519,7 +1592,7 @@ module.exports = class datalake {
                             return callback(null, items);
                         }
                         return callback('Hash Key not found in Redis zrangebyscore');
-                    });
+                    }));
                 },
                 (DataItems, callback) => {
                     async.forEachOf(DataItems, (item, i, callback) => {
@@ -1692,7 +1765,7 @@ module.exports = class datalake {
                 if (this.RedisConnected) {
                     async.waterfall([
                         (callback) => {
-                            redisClient.smembers("Master:" + VESShortCode, (err, res) => {
+                            this.getConnection().then((redisClient) => redisClient.smembers("Master:" + VESShortCode, (err, res) => {
                                 if (err) {
                                     console.log({ details: "RefreshSchemaSearchIndex:getHashAll:Error", error: err });
                                     return callback(err);
@@ -1700,7 +1773,7 @@ module.exports = class datalake {
                                     return callback(null, res);
                                 }
                                 return callback('Hash Key not found in Redis');
-                            });
+                            }));
                         },
                         (ScemaItems, callback) => {
                             async.forEachOfSeries(ScemaItems, (Guid, key, callbackeach) => {
@@ -1833,7 +1906,7 @@ module.exports = class datalake {
 
                 async.waterfall([
                     (callback) => {
-                        if(this.flagLabel) {
+                        if (this.flagLabel) {
                             this.CreateTPGUID(VESShortCode, Guid, callback);
                         } else {
                             return callback(null, Guid ? Guid : uuid.v4());
@@ -1866,7 +1939,7 @@ module.exports = class datalake {
         async.waterfall([
             (callback) => {
                 if (Guid && this.flagLabel) {
-                    redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
+                    this.getConnection().then((redisClient) => redisClient.sismember("Master:" + VESShortCode, Guid, (err, res) => {
                         if (err) {
                             return callback(err);
                         }
@@ -1874,7 +1947,7 @@ module.exports = class datalake {
                             return callback(null, [Guid]);
                         }
                         return callback('Posted VESShortCode not found in TpSchemaSet');
-                    });
+                    }));
                 } else {
                     this.sscanSearch(VESShortCode, finalResult, 0, callback);
                 }
@@ -2107,7 +2180,7 @@ module.exports = class datalake {
 
     scanSearch(Search, finalResult, startFrom, endAt) {
         return new Promise((resolve, reject) => {
-            redisClient.scan(startFrom, 'MATCH', Search + '*', 'COUNT', endAt, (err, result) => {
+            this.getConnection().then((redisClient) => redisClient.scan(startFrom, 'MATCH', Search + '*', 'COUNT', endAt, (err, result) => {
                 if (err) {
                     console.log('err:', err);
                     return reject(err);
@@ -2119,7 +2192,7 @@ module.exports = class datalake {
                     return resolve(finalResult);
                 }
                 return resolve(this.scanSearch(Search, finalResult, result[0], endAt));
-            });
+            }));
         });
     }
 
@@ -2134,7 +2207,7 @@ module.exports = class datalake {
             this.scanSearch(Search, ResultArr, 0, 10000).
                 then((finalResult) => {
                     async.forEachOf(finalResult, (eachDistinct, key, callback) => {
-                        redisClient.scard(Search + eachDistinct, function (err, count) {
+                        this.getConnection().then((redisClient) => redisClient.scard(Search + eachDistinct, function (err, count) {
                             if (err) {
                                 console.log(err);
                                 return callback(err);
@@ -2144,7 +2217,7 @@ module.exports = class datalake {
                                 ResultArr = ResultArr.concat(eachDistinct);
                             }
                             return callback(null);
-                        });
+                        }));
                     }, (err) => {
                         if (err) {
                             console.log(err);
@@ -2168,7 +2241,7 @@ module.exports = class datalake {
         let finalResult = [];
         return new Promise((resolve, reject) => {
             if (this.flagLabel) {
-                redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', 'COUNT', BATCHCOUNT, (err, result) => {
+                this.getConnection().then((redisClient) => redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', 'COUNT', BATCHCOUNT, (err, result) => {
                     if (err) {
                         console.log('err:', err);
                         return reject(err);
@@ -2198,9 +2271,9 @@ module.exports = class datalake {
                         return resolve([result[0], finalResult]);
                     });
 
-                });
+                }));
             } else {
-                redisClient.hscan("Data:" + VESShortCode, Nextbatch, 'COUNT', BATCHCOUNT, (err, result) => {
+                this.getConnection().then((redisClient) => redisClient.hscan("Data:" + VESShortCode, Nextbatch, 'COUNT', BATCHCOUNT, (err, result) => {
                     if (err) {
                         console.log('err:', err);
                         return reject(err);
@@ -2235,10 +2308,68 @@ module.exports = class datalake {
                         }
                         return resolve([result[0], finalResult]);
                     });
-                })
+                }))
             }
         });
     }
+
+    Fetch(postData) {
+        return new Promise((resolve, reject) => {
+            // People Schema to get count people id
+            let Search = 'Data:' + postData.Schema + ':';
+            let schemaData = {};
+
+            for (const joinedSchema of postData.JoinWith) {
+                schemaData[joinedSchema] = [];
+            }
+
+            postData.JoinWith = postData.JoinWith.filter(e => e !== postData.Schema);
+
+            this.getConnection().
+                then((redisClient) => redisClient.
+                    scan(postData.countStart, 'MATCH', Search + '*', 'COUNT', postData.countEnd, (err, result) => {
+                        if (err) {
+                            console.log('err:', err);
+                            return reject(err);
+                        }
+
+                        // Get all values for schema we have passed. 
+                        async.forEachOf(result[1], (sData, key, callback) => {
+                            this.getHash(sData, postData.Keyword, (err, result) => {
+                                schemaData[postData.Schema].push(JSON.parse(result));
+                                async.forEachOf(postData.JoinWith, (joinSchema, key, callback) => {
+                                    if (result !== null) {
+                                        this.getConnection().
+                                            then((redisClient) => redisClient.
+                                                sscan("{SearchIndex}." + joinSchema + ':' + postData.Keyword + ':' + postData.Field + ':' + JSON.parse(result).id, 0, 'count', 1000, (err, setGuid) => {
+                                                    const Hash = 'Data:' + joinSchema + ':' + setGuid[1];
+                                                    this.getHash(Hash, postData.Keyword, (err, result) => {
+                                                        if (result !== null) {
+                                                            schemaData[joinSchema].push(JSON.parse(result));
+                                                        }
+                                                        return callback(null);
+                                                    })
+                                                }))
+                                    }
+                                }, (err) => {
+                                    if (err) {
+                                        console.log(err);
+                                    }
+                                    return callback(null);
+                                })
+                            });
+                        }, function (err) {
+                            if (err) {
+                                console.log(err);
+                                return reject(err);
+                            }
+                            return resolve([result[0], schemaData]);
+                        });
+                    }));
+        });
+
+    }
+
     createConnection(Payload) {
         return new Promise((resolve, reject) => {
             console.error('use CreateConnection(), createConnection() is depricated');
