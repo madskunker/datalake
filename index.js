@@ -98,14 +98,17 @@ module.exports = class datalake {
         });
     }
     CloseConnection() {
-        async.forEachOf(connectionArray, (connections, key, callback) => {
-            connections.quit();
-            return callback(null);
-        }, () => {
-            connectionArray = [];
-            // this.flagLabel = false;
-            this.RedisConnected = false;
-        });
+        return new Promise((resolve, reject) => {
+            async.forEachOf(connectionArray, (connections, key, callback) => {
+                connections.quit();
+                return callback(null);
+            }, () => {
+                connectionArray = [];
+                // this.flagLabel = false;
+                this.RedisConnected = false;
+                return resolve();
+            });
+        })
     }
     ListSchemas() {
         return new Promise((resolve, reject) => {
