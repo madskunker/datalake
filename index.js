@@ -21,7 +21,6 @@ module.exports = class datalake {
         this.maxConnection = 0;
         this.ConnectionInUse = 0;
     }
-
     CreatePoolConnections(ConnectionObj) {
         return new Promise((resolve, reject) => {
             try {
@@ -56,7 +55,6 @@ module.exports = class datalake {
                             return reject(err);
                         }
                         this.RedisConnected = true;
-                        this.flagLabel = ConnectionObj.flagLabel === false ? false : true;
                         return resolve();
                     }
                 );
@@ -65,7 +63,6 @@ module.exports = class datalake {
             }
         });
     }
-
     getConnection(iteration) {
         return new Promise((resolve, reject) => {
             try {
@@ -79,7 +76,7 @@ module.exports = class datalake {
                 } else if (iteration <= this.maxConnection) {
                     this.ConnectionInUse++;
                     iteration = iteration + 1;
-                    return resolve(this.redisClient(iteration));
+                    return resolve(this.getConnection(iteration));
                 } else {
                     connectionArray = [];
                     this.CreatePoolConnections(connectionCredentials).
@@ -93,7 +90,6 @@ module.exports = class datalake {
             }
         })
     }
-
     CreateConnection(ConnectionObj) {
         return new Promise((resolve, reject) => {
             this.CreatePoolConnections(ConnectionObj).
@@ -101,7 +97,6 @@ module.exports = class datalake {
                 catch((err) => reject(err));
         });
     }
-
     CloseConnection() {
         async.forEachOf(connectionArray, (connections, key, callback) => {
             connections.quit();
@@ -110,19 +105,15 @@ module.exports = class datalake {
             connectionArray = [];
             // this.flagLabel = false;
             this.RedisConnected = false;
-        })
+        });
     }
-
     ListSchemas() {
         return new Promise((resolve, reject) => {
             var retJSON = {};
             try {
                 if (this.RedisConnected) {
-                    if (!this.flagLabel) {
-                        return resolve({ Status: "false", Message: "This is function is depricated due to your redis connection type with flagLabel = false" });
-                    }
-                    this.getConnection().then((redisClient) => redisClient.hlen("Index", (err, count) => {
-                        this.getConnection().then((redisClient) => redisClient.hscan("Index", 0, 'MATCH', '*', 'count', count, (err, res) => {
+                    this.getConnection().then((redisClient) => {
+                        redisClient.scan(0, 'MATCH', 'Index:*', 'COUNT', 10000, (err, res) => {
                             if (err) {
                                 retJSON.Status = 'false';
                                 retJSON.Message = err;
@@ -132,16 +123,14 @@ module.exports = class datalake {
                             retJSON.Message = 'Success';
                             retJSON.Count = '';
                             retJSON.items = [];
-                            for (const item in res[1]) {
-                                if (item % 2 === 0) { // index is even
-                                    retJSON.items = retJSON.items.concat(res[1][item]);
-                                }
+                            for (const item of res[1]) {
+                                retJSON.items = retJSON.items.concat(item.replace(/"Index"/g, ''));
                             }
                             retJSON.Count = retJSON.items.length;
                             retJSON.items = retJSON.items.sort()
                             return resolve(retJSON);
-                        }));
-                    }))
+                        });
+                    });
                 } else {
                     retJSON.Status = 'false';
                     retJSON.Message = 'Redis not Connected';
@@ -184,24 +173,45 @@ module.exports = class datalake {
             var retJSON = {};
             try {
                 var Hash = postData ? postData.Schema : '';
+                var key = postData.Key ? postData.Key : null;
                 if (this.RedisConnected) {
-                    this.getConnection().then((redisClient) => redisClient.hgetall(Hash, (err, response) => {
-                        if (err) {
-                            retJSON.Status = 'false';
-                            retJSON.Message = err;
-                            return resolve(retJSON);
-                        }
-                        if (response) {
-                            var resultArray = [];
-                            for (var index in response) { // eslint-disable-line
-                                resultArray = resultArray.concat(response[index]);
-                            }
-                            retJSON.Status = 'true';
-                            retJSON.Data = resultArray;
-                            return resolve(retJSON);
-                        }
-                        return resolve('Hash not found in Redis');
-                    }));
+                    if (key) {
+                        this.getConnection().then((redisClient) => {
+                            redisClient.hget(Hash, key, (err, response) => {
+                                if (err) {
+                                    retJSON.Status = 'false';
+                                    retJSON.Message = err;
+                                    return resolve(retJSON);
+                                }
+                                if (response) {
+                                    retJSON.Status = 'true';
+                                    retJSON.Data = [response];
+                                    return resolve(retJSON);
+                                }
+                                return resolve('Hash not found in Redis');
+                            });
+                        });
+                    } else {
+                        this.getConnection().then((redisClient) => {
+                            redisClient.hgetall(Hash, (err, response) => {
+                                if (err) {
+                                    retJSON.Status = 'false';
+                                    retJSON.Message = err;
+                                    return resolve(retJSON);
+                                }
+                                if (response) {
+                                    var resultArray = [];
+                                    for (var index in response) { // eslint-disable-line
+                                        resultArray = resultArray.concat(response[index]);
+                                    }
+                                    retJSON.Status = 'true';
+                                    retJSON.Data = resultArray;
+                                    return resolve(retJSON);
+                                }
+                                return resolve('Hash not found in Redis');
+                            })
+                        });
+                    }
                 }
             } catch (error) {
                 console.log(error);
@@ -225,7 +235,6 @@ module.exports = class datalake {
             });
         });
     }
-
     CreateTPGUID(VESShortCode, Guid, callback) {
         var myUUID = Guid ? Guid : uuid.v4();
         try {
@@ -242,7 +251,6 @@ module.exports = class datalake {
             return callback(null, myUUID);
         }
     }
-
     getPayloadData(request) {
         try {
             var payloadStr = request;
@@ -263,46 +271,6 @@ module.exports = class datalake {
             return false;
         }
     }
-
-    CreateSchema(postData) {
-        return new Promise((resolve, reject) => {
-            var retJSON = {};
-            try {
-                var payload = this.getPayloadData(postData);
-
-                if (!payload.VESShortCode) {
-                    return reject({ Status: false, Message: 'Invalid Postdata' });
-                }
-
-                if (!this.flagLabel) {
-                    return resolve({ Status: "false", Message: "This is function is depricated due to your redis connection type with flagLabel = false" });
-                }
-
-                this.CreateTPGUID(payload.VESShortCode, payload.Guid ? payload.Guid : null, (err, Guid) => {
-                    if (err) {
-                        console.log('redis not connected');
-                        console.log({ details: "CreateSchema", error: retJSON });
-                        retJSON.Status = "false";
-                        retJSON.Message = "Redis connection problem";
-                        retJSON.insertId = "";
-                    } else {
-                        retJSON.Status = "true";
-                        retJSON.Message = "Success";
-                        retJSON.insertId = Guid;
-                    }
-                    return resolve(retJSON);
-                });
-            } catch (err) {
-                console.log('err', err);
-                retJSON.Status = "false";
-                retJSON.Message = err;
-                retJSON.insertId = "";
-                console.log({ details: "CreateSchema exception", error: err });
-                return resolve(retJSON);
-            }
-        });
-    }
-
     SetupSearchIndex(Hash) {
         try {
             if (this.RedisConnected) {
@@ -314,7 +282,6 @@ module.exports = class datalake {
             console.log({ details: "SetupSearchIndex exception", error: err });
         }
     }
-
     ConfigureSearchIndex(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -324,7 +291,7 @@ module.exports = class datalake {
                 if (!payload.ShortCodes) {
                     return reject({ Status: false, Message: 'Invalid Postdata' });
                 }
-                if (this.flagLabel && !payload.Keyword) {
+                if (!payload.Keyword) {
                     retJSON.Status = "false";
                     retJSON.Message = "Missing manditory keys Keyword";
                     return resolve(retJSON);
@@ -350,7 +317,6 @@ module.exports = class datalake {
             }
         });
     }
-
     addRedisData(type, VESShortCode, Keyword, ShortCode, Value, Guid) {
         try {
             if (type == "string") {
@@ -374,7 +340,6 @@ module.exports = class datalake {
             console.log(err);
         }
     }
-
     processMetaData(VESShortCode, Keyword, Guid, searchHash, MetaData, oldMetaData) {
         const self = this;
         try {
@@ -454,7 +419,6 @@ module.exports = class datalake {
             console.log(exp);
         }
     }
-
     populateSearchIndex(_VESShortCode, _Guid, _Keyword, _MetaData, Type, callback) {
         try {
             var Guid = "", VESShortCode = "", Keyword = "", MetaData = {};
@@ -563,8 +527,6 @@ module.exports = class datalake {
             return callback(err);
         }
     }
-
-
     dataInsert(VESShortCode, Guid, Keyword, MetaData, Tag, Comment, Action, retJSON, callback) {
         try {
             const get = this.flagLabel ? ['Data:' + VESShortCode + ':' + Guid, Keyword] : ['Data:' + VESShortCode, Guid];
@@ -610,7 +572,6 @@ module.exports = class datalake {
             return callback(error);
         }
     }
-
     getHash(Hash, Key, callback) {
         try {
             if (this.RedisConnected) {
@@ -631,7 +592,6 @@ module.exports = class datalake {
             return callback(err);
         }
     }
-
     formatDate(inputDate) {
         try {
             var searchDT = new Date(inputDate);
@@ -644,7 +604,6 @@ module.exports = class datalake {
             return "";
         }
     }
-
     getResult(SearchListString, SearchLOVString, SearchListScore, SearchLOVScore, callback) {
         try {
             var GuidList = [];
@@ -718,7 +677,6 @@ module.exports = class datalake {
             return callback(exp);
         }
     }
-
     getResultLOV(preGuidList, SearchListString, SearchLOVString, SearchListScore, SearchLOVScore, callback) {
         try {
             var GuidList = [];
@@ -818,7 +776,6 @@ module.exports = class datalake {
             return callback(exp);
         }
     }
-
     getSearchData(GuidList, VESShortCode, Keyword, callback) {
         try {
             var items = [];
@@ -846,7 +803,6 @@ module.exports = class datalake {
             return callback(exp);
         }
     }
-
     SearchTPHash(VESShortCode, Keyword, payload, resultArray, callback) {
         try {
             var keys = Object.keys(payload);
@@ -982,7 +938,6 @@ module.exports = class datalake {
             return callback(err);
         }
     }
-
     SearchDataByProperty(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1017,7 +972,6 @@ module.exports = class datalake {
             }
         });
     }
-
     getHashAll(Hash, callback) {
         try {
             if (this.RedisConnected) {
@@ -1038,7 +992,6 @@ module.exports = class datalake {
             return callback(err);
         }
     }
-
     sscanSearch(VESShortCode, finalResult, Nextbatch, callback) {
         this.getConnection().then((redisClient) => redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', (err, result) => {
             if (err) {
@@ -1054,7 +1007,6 @@ module.exports = class datalake {
             this.sscanSearch(VESShortCode, finalResult, result[0], callback);
         }));
     }
-
     GetAllSchemaData(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1185,7 +1137,6 @@ module.exports = class datalake {
             }
         });
     }
-
     snapShotVESData(VESShortCode, Guid, Tag, Comment, Action, callback) {
         try {
             if (this.RedisConnected) {
@@ -1246,7 +1197,6 @@ module.exports = class datalake {
             return callback(exp);
         }
     }
-
     CreateBackupData(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1299,7 +1249,6 @@ module.exports = class datalake {
             }
         });
     }
-
     removeDataHash(_VESShortCode, _Guid, _Keyword, _MetaData, callback) {
         try {
             var VESShortCode = "", Guid = "", Keyword = "", MetaData = "";
@@ -1391,7 +1340,6 @@ module.exports = class datalake {
             return callback(err);
         }
     }
-
     RemoveData(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1472,7 +1420,6 @@ module.exports = class datalake {
             }
         });
     }
-
     checkTPData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
         try {
             if (self.RedisConnected) {
@@ -1493,7 +1440,6 @@ module.exports = class datalake {
             return callback(exp);
         }
     }
-
     snapShotData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
         try {
             async.waterfall([
@@ -1552,7 +1498,6 @@ module.exports = class datalake {
             return callback(error);
         }
     }
-
     rollbackData(VESShortCode, Guid, Tag, Comment, Action, RollbackVersion, self, callback) {
         try {
             async.waterfall([
@@ -1622,7 +1567,6 @@ module.exports = class datalake {
             return callback(error);
         }
     }
-
     RestoreData(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1690,7 +1634,6 @@ module.exports = class datalake {
             }
         });
     }
-
     ListSearchIndex(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1737,7 +1680,6 @@ module.exports = class datalake {
             }
         });
     }
-
     RefreshSchemaSearchIndex(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1846,7 +1788,6 @@ module.exports = class datalake {
             }
         });
     }
-
     InsertData(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -1932,7 +1873,6 @@ module.exports = class datalake {
             }
         });
     }
-
     getAllSchemaData(VESShortCode, Guid, Keyword, items, callback) {
         // var retJSON = {};
         var finalResult = [];
@@ -2033,7 +1973,6 @@ module.exports = class datalake {
             return callback(null);
         });
     }
-
     SearchMultipleData(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -2111,7 +2050,6 @@ module.exports = class datalake {
             }
         });
     }
-
     Search(postData) {
         return new Promise((resolve, reject) => {
             var retJSON = {};
@@ -2177,7 +2115,6 @@ module.exports = class datalake {
             }
         });
     }
-
     scanSearch(Search, finalResult, startFrom, endAt) {
         return new Promise((resolve, reject) => {
             this.getConnection().then((redisClient) => redisClient.scan(startFrom, 'MATCH', Search + '*', 'COUNT', endAt, (err, result) => {
@@ -2195,7 +2132,6 @@ module.exports = class datalake {
             }));
         });
     }
-
     getDistinctRecords(Payload) {
         return new Promise((resolve, reject) => {
             const RecordMoreThan = Payload.RecordMoreThan ? Payload.RecordMoreThan : 1000;
@@ -2207,7 +2143,7 @@ module.exports = class datalake {
             this.scanSearch(Search, ResultArr, 0, 10000).
                 then((finalResult) => {
                     async.forEachOf(finalResult, (eachDistinct, key, callback) => {
-                        this.getConnection().then((redisClient) => redisClient.scard(Search + eachDistinct, function (err, count) {
+                        this.getConnection().then((redisClient) => redisClient.scard(Search + eachDistinct, (err, count) => {
                             if (err) {
                                 console.log(err);
                                 return callback(err);
@@ -2237,102 +2173,66 @@ module.exports = class datalake {
                 });
         });
     }
-    getSchemaRecordsBatch(VESShortCode, Keyword, Nextbatch, BATCHCOUNT, field) {
+    SearchTopRecords(postData) {
+        const VESShortCode = postData.VESShortCode;
+        const Keyword = postData.Keyword;
+        const Nextbatch = postData.Nextbatch;
+        const BATCHCOUNT = postData.BATCHCOUNT;
+        const field = postData.field;
         let finalResult = [];
         return new Promise((resolve, reject) => {
-            if (this.flagLabel) {
-                this.getConnection().then((redisClient) => redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', 'COUNT', BATCHCOUNT, (err, result) => {
+            this.getConnection().then((redisClient) => redisClient.sscan("Master:" + VESShortCode, Nextbatch, 'MATCH', '*', 'COUNT', BATCHCOUNT, (err, result) => {
+                if (err) {
+                    console.log('err:', err);
+                    return reject(err);
+                }
+                async.forEachOf(result[1], (Guid, i, callback) => {
+                    this.getHash("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
+                        if (err) {
+                            console.log({ details: "getSchemaRecordsBatch:getHash:Error", error: err });
+                        } else {
+                            // console.log(JSON.parse(res));
+                            try {
+                                finalResult = finalResult.concat(JSON.parse(res)[field]); // eslint-disable-line
+                            } catch (error) {
+                                console.log(error);
+                            }
+                        }
+                        return callback(null);
+                    });
+                }, (err) => {
                     if (err) {
-                        console.log('err:', err);
+                        console.log({ details: "GetAllSchemaData exception", error: err });
                         return reject(err);
                     }
-                    async.forEachOf(result[1], (Guid, i, callback) => {
-                        this.getHash("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
-                            if (err) {
-                                console.log({ details: "getSchemaRecordsBatch:getHash:Error", error: err });
-                            } else {
-                                // console.log(JSON.parse(res));
-                                try {
-                                    finalResult = finalResult.concat(JSON.parse(res)[field]); // eslint-disable-line
-                                } catch (error) {
-                                    console.log(error);
-                                }
-                            }
-                            return callback(null);
-                        });
-                    }, (err) => {
-                        if (err) {
-                            console.log({ details: "GetAllSchemaData exception", error: err });
-                            return reject(err);
-                        }
-                        if (result[0] == 0) {
-                            return resolve([null, finalResult]);
-                        }
-                        return resolve([result[0], finalResult]);
-                    });
+                    if (result[0] == 0) {
+                        return resolve([null, finalResult]);
+                    }
+                    return resolve([result[0], finalResult]);
+                });
 
-                }));
-            } else {
-                this.getConnection().then((redisClient) => redisClient.hscan("Data:" + VESShortCode, Nextbatch, 'COUNT', BATCHCOUNT, (err, result) => {
-                    if (err) {
-                        console.log('err:', err);
-                        return reject(err);
-                    }
-                    let guidList = []
-                    for (const key in result[1]) {
-                        if (key % 2 === 0) {
-                            guidList = guidList.concat(result[1][key]);
-                        }
-                    }
-                    async.forEachOf(guidList, (Guid, i, callback) => {
-                        this.getHash("Data:" + VESShortCode, Guid, (err, res) => {
-                            if (err) {
-                                console.log({ details: "getSchemaRecordsBatch:getHash:Error", error: err });
-                            } else {
-                                // console.log(JSON.parse(res));
-                                try {
-                                    finalResult = finalResult.concat(JSON.parse(res)[field]); // eslint-disable-line
-                                } catch (error) {
-                                    console.log(error);
-                                }
-                            }
-                            return callback(null);
-                        });
-                    }, (err) => {
-                        if (err) {
-                            console.log({ details: "GetAllSchemaData exception", error: err });
-                            return reject(err);
-                        }
-                        if (result[0] == 0) {
-                            return resolve([null, finalResult]);
-                        }
-                        return resolve([result[0], finalResult]);
-                    });
-                }))
-            }
+            }));
         });
     }
-
     Fetch(postData) {
         return new Promise((resolve, reject) => {
             // People Schema to get count people id
             let Search = 'Data:' + postData.Schema + ':';
             let schemaData = {};
+            schemaData.Count = [];
 
             for (const joinedSchema of postData.JoinWith) {
                 schemaData[joinedSchema] = [];
             }
 
             postData.JoinWith = postData.JoinWith.filter(e => e !== postData.Schema);
-
             this.getConnection().
-                then((redisClient) => redisClient.
-                    scan(postData.countStart, 'MATCH', Search + '*', 'COUNT', postData.countEnd, (err, result) => {
+                then((redisClient) => {
+                    redisClient.scan(postData.countStart, 'MATCH', Search + '*', 'COUNT', postData.countEnd, (err, result) => {
                         if (err) {
                             console.log('err:', err);
                             return reject(err);
                         }
-
                         // Get all values for schema we have passed. 
                         async.forEachOf(result[1], (sData, key, callback) => {
                             this.getHash(sData, postData.Keyword, (err, result) => {
@@ -2340,16 +2240,21 @@ module.exports = class datalake {
                                 async.forEachOf(postData.JoinWith, (joinSchema, key, callback) => {
                                     if (result !== null) {
                                         this.getConnection().
-                                            then((redisClient) => redisClient.
-                                                sscan("{SearchIndex}." + joinSchema + ':' + postData.Keyword + ':' + postData.Field + ':' + JSON.parse(result).id, 0, 'count', 1000, (err, setGuid) => {
-                                                    const Hash = 'Data:' + joinSchema + ':' + setGuid[1];
-                                                    this.getHash(Hash, postData.Keyword, (err, result) => {
-                                                        if (result !== null) {
-                                                            schemaData[joinSchema].push(JSON.parse(result));
-                                                        }
+                                            then((redisClient) => {
+                                                redisClient.sscan("{SearchIndex}." + joinSchema + ':' + postData.Keyword + ':' + postData.Field + ':' + JSON.parse(result)[postData.Field], 0, 'count', 1000, (err, setGuid) => {
+                                                    if (setGuid[1].length > 0) {
+                                                        const Hash = 'Data:' + joinSchema + ':' + setGuid[1];
+                                                        this.getHash(Hash, postData.Keyword, (err, result) => {
+                                                            if (result !== null) {
+                                                                schemaData[joinSchema].push(JSON.parse(result));
+                                                            }
+                                                            return callback(null);
+                                                        });
+                                                    } else {
                                                         return callback(null);
-                                                    })
-                                                }))
+                                                    }
+                                                });
+                                            });
                                     }
                                 }, (err) => {
                                     if (err) {
@@ -2358,18 +2263,22 @@ module.exports = class datalake {
                                     return callback(null);
                                 })
                             });
-                        }, function (err) {
+                        }, (err) => {
                             if (err) {
                                 console.log(err);
                                 return reject(err);
                             }
+                            for (const joinedSchema of postData.JoinWith) {
+                                schemaData.Count = schemaData.Count.concat(joinedSchema + ':' + schemaData[joinedSchema].length);
+                            }
+                            schemaData.Count = schemaData.Count.concat(postData.Schema + ':' + schemaData[postData.Schema].length);
                             return resolve([result[0], schemaData]);
                         });
-                    }));
+                    });
+                });
         });
 
     }
-
     createConnection(Payload) {
         return new Promise((resolve, reject) => {
             console.error('use CreateConnection(), createConnection() is depricated');
@@ -2418,16 +2327,6 @@ module.exports = class datalake {
                 catch((err) => reject(err));
         });
     }
-    /** Directly called to main function no need to Depricate InsertData function name * /
-    InsertData(Payload) {
-        return new Promise((resolve, reject) => {
-            console.error('use InsertData(), InsertData() is depricated');
-            this.InsertData(Payload).
-                then((result) => resolve(result)).
-                catch((err) => reject(err));
-        });
-    }
-    /** */
     GetTidalPoolSchema(Payload) {
         return new Promise((resolve, reject) => {
             console.error('use GetAllSchemaData(), GetTidalPoolSchema() is depricated');
@@ -2532,5 +2431,4 @@ module.exports = class datalake {
                 catch((err) => reject(err));
         });
     }
-
 };
