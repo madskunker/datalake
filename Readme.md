@@ -17,61 +17,54 @@ const datalake = require('datalake');
 const dl = new datalake();
 ```
 
+**Implementation**
+
+Code:
+
+```js
+const dl = require('datalake');
+const datalake = new datalake();
+
+datalake.MethodName(InputParamater).
+    then((response) => {
+        // do your logics here
+    }).
+    catch((err) => {
+        console.log(err);
+    });
+```
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 ## Available Methods
 
-| S.No | Method Name | Description |
-| ---- | ----------- | ----------- |
-| 1  | [CreateConnection](#createconnection) | This will Create Redis Connection pool object. |
-| 2  | [CloseConnection](#closeconnection) | This will close already created Redis connection pool if any. |
-| 3  | [ShowConnectionStatus](#showstatus) | Returns the Status of Redis connection |
-| 4  | [ConfigureSearchIndex](#setupsearchhash) | Defining Redis Schema index keys |
-| 5  | [InsertTidalPoolSchema](#inserttidalpoolschema) | This will Create new Schema |
-| 6  | [InsertTPData](#inserttpdata) | This will insert Key value pair against the Schema given |
-| 7  | [InsertData](#insertdata) | This will insert Key value pair against the Schema given, if Schema is not found, automatically will create new Schema and insert the key value pair against the newly created schema |
-| 8  | [GetAllSchemaData](#gettidalpoolschema) | This will search records for given Keyword, Schema and returns all Key-value pair available in the schema. Result can be filtered with particular Guid |
-| 9  | [SearchDataByProperty](#searchtidalpoolhash) | This will search record for given PropertyField, PropertyValue, Keyword and SchemaName including comma(,) separated PropertyValues and range of PropertyValue |
-| 10 | [SearchMultipleData](#getdatafromschemas) | This Method is the combination of GetSearchHashSchema, GetTidalPoolSchema, and SearchTidalPoolHash. This will search the records for given PropertyField, PropertyValue, Keyword and SchemaName. Multi-value search of records using comma(,) separated list of PropertyValue(s) or range between the PropertyValue(s) or it can be filtered with particular Guid. **It can also performs multiple comma(,) separated Schema Name search**. |
-| 11 | [ListSchemas](#getschemalist) | GetSchemaList will return list of Schema Names available in the Selected Redis DB. |
-| 12 | [ListSearchIndex](#getsearchhashschema) | This will return the defined Redis Schema index keys for the given Schema Name. |
-| 13 | [ListSearchIndex](#gettpsearchhash) | This will return the defined Redis Schema index keys for the given Schema Name. |
-| 14 | [SetCacheData](#setkeydata) | Set cache data into the Redis DB for the given key-value pair with TTL(Time to live) provided. _If TTL(Time to live) not provided, it will set cache data as permanent data._ |
-| 15 | [GetCacheData](#getkeydata) | Get the value from cache memory for given search key before the TTL(Time to live) expires|
-| 16 | [RefreshSchemaSearchIndex](#refreshtidalpooldata) | Refresh/Re-Build all the search index for the given Schema Name |
-| 17 | [RefreshSchemaSearchIndex](#updatetidalpoolhash) | Refresh/Re-Build particular search index for the given Guid, Schema Name. |
-| 18 | [CreateBackupData](#snapshottidalpooldata) | It Creates Backup copy of given Guid, Schema Name. |
-| 19 | [RemoveData](#removetidalpooldata) | It Creates Backup copy of given Guid, Schema Name and Removes Key-value pair from the Schema. |
-| 20 | [RestoreData](#rollbacktidalpooldata) | It Creates Backup copy of current Key-Value pair for the Given Guid-Schema and Replaces old Key-Value pair from Archive. |
-| 21 | [Search](#search) | Search |
+| S.No | API Name | Method | Required Fields | Optional Fields | Sample PostData | Notes |
+| ---- | -------- | ------ | --------------- | --------------- | --------------- | ----- |
+| 2 | [/CloseConnection](#closeconnection) | GET | ------------ | ------------ | ------------ | ------------ |
+| 2 | [/ConfigureSearchIndex](#configuresearchindex) | POST | ShortCodes(sc, type, csv), Schema, Keyword | ------------ |[/ConfigureSearchIndex](#configuresearchindex) | ------------ |
+| 2 | [/CreateBackupData](#createbackupdata) | POST | Schema, Guid | ------------ | [/CreateBackupData](#createbackupdata) | ------------ |
+| 2 | [/CreateConnection](#createconnection) | POST | host,dbname | port,password,maxConnection | [/CreateConnection](#createconnection) | ------------ |
+| 2 | [/Fetch](#fetch) | POST | 
+| 2 | [/GetAllSchemaData](#getallschemadata) | POST | Schema| Keyword, Guid | [/GetAllSchemaData](#getallschemadata) | This API cannot used in big data (_Server will crash_) |
+| 2 | [/GetCacheData](#getcachedata) | POST | Schema,Key | ------------ | [/GetCacheData](#getcachedata) | ------------ |
+| 2 | [/getDistinctRecords](#getDistinctRecords) | POST |
+| 2 | [/InsertData](#insertdata) | POST | Schema, Keyword, MetaData | ------------ | [/InsertData](#insertdata) | ------------ |
+| 2 | [/ListSchemas](#listschemas) | GET | ------------ | ------------ | ------------ | ------------ |
+| 2 | [/ListSearchIndex](#listsearchindex) | POST | Schema, Keyword | ------------ | [/ListSearchIndex](#listsearchindex) | ------------ |
+| 2 | [/RefreshSchemaSearchIndex](#refreshschemasearchindex) | POST | Schema | Guid | [/RefreshSchemaSearchIndex](#refreshschemasearchindex) | ------------ |
+| 2 | [/RemoveData](#removedata) | POST |
+| 2 | [/RestoreData](#restoredata) | POST | Schema, Guid, Version | ------------ | [/RestoreData](#restoredata) | ------------ |
+| 2 | [/Search](#search) | POST | Schema, Keyword | (SearchFields), recordFrom, recordUpto, Guid | [/Search](#search) | Schema, (SearchFields) can be single value or can be comma (,) seperated or can be ranged (~). Either (SearchFields) or Guid should be given else This API cannot used in big data (_Server will crash_)|
+| 2 | [/SearchDataByProperty](#searchdatabyproperty) | POST | Schema, Keyword, (SearchFields) | ------------ | [/SearchMultipleData](#searchmultipledata) | (SearchFields) can be single value or can be comma (,) seperated or can be ranged (~) |
+| 2 | [/SearchMultipleData](#searchmultipledata)  | POST | Schema, Keyword | PropertyField, PropertyValue, Guid | [/SearchDataByProperty](#searchdatabyproperty) | Schema, PropertyField, PropertyValue can be single value or can be comma (,) seperated or can be ranged (~). Either (SearchFields) or Guid should be given else This API cannot used in big data (_Server will crash_) |
+| 2 | [/SearchTopRecords](#SearchTopRecords) | POST | Schema, Keyword, Nextbatch, BATCHCOUNT, field | ------- | [/SearchTopRecords](#SearchTopRecords) | Nextbatch will be first element of response data |
+| 2 | [/SetCacheData](#setcachedata) | POST | Schema, Key, Data | Timeout | [/SetCacheData](#setcachedata) | If Timeout is not given, Data will be stored in redis permanently |
+| 2 | [/ShowConnectionStatus](#showconnectionstatus) | GET | ------------ | ------------ | ------------ | ------------ |
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-_Function Names are Renamed in v1.3.4, Please Read below Table for new function name_
+## Sample Input
 
-| S.No | Method Name | Renamed To |
-| ---- | ----------- | ---------- |
-| 1 | [closeConnection](#closeconnection) | CloseConnection |
-| 2 | [createConnection](#createconnection) | CreateConnection |
-| 3 | [GetDatafromSchemas](#getdatafromschemas) | SearchMultipleData |
-| 4 | [GetKeyData](#getkeydata) | GetCacheData |
-| 5 | [GetSchemaList](#getschemalist) | ListSchemas |
-| 6 | [GetSearchHashSchema](#getsearchhashschema) | ListSearchIndex |
-| 7 | [GetTidalPoolSchema](#gettidalpoolschema) | GetAllSchemaData |
-| 8 | [GetTpSearchHash](#gettpsearchhash) | ListSearchIndex |
-| 9 | [InsertData](#insertdata) | `InsertData` |
-| 10 | [InsertTidalPoolSchema](#inserttidalpoolschema) | CreateSchema |
-| 11 | [InsertTPData](#inserttpdata) | `InsertData` |
-| 12 | [RefreshTidalPoolData](#refreshtidalpooldata) | RefreshSchemaSearchIndex |
-| 13 | [RemoveTidalPoolData](#removetidalpooldata) | RemoveData |
-| 14 | [RollbackTidalPoolData](#rollbacktidalpooldata) | RestoreData |
-| 15 | [SearchTidalPoolHash](#searchtidalpoolhash) | SearchDataByProperty |
-| 16 | [SetKeyData](#setkeydata) | SetCacheData |
-| 17 | [SetupSearchHash](#setupsearchhash) | ConfigureSearchIndex |
-| 18 | [showStatus](#showstatus) | ShowConnectionStatus |
-| 19 | [SnapshotTidalPoolData](#snapshottidalpooldata) | CreateBackupData |
-| 20 | [UpdateTidalPoolHash](#updatetidalpoolhash) | RefreshSchemaSearchIndex |
-| 21 | [Search](#search) | Search |
-
-## Methods
-
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **createConnection**
 
@@ -79,34 +72,18 @@ _Function Names are Renamed in v1.3.4, Please Read below Table for new function 
 
 > This will Create Redis Connection pool object.
 
-**Implementation**
-
 Post Data:
 
 ```json
 {
     "host": "localhost",
-    "dbname": "0"
+    "dbname": "0",
+    "port": "1607", // Optional
+    "password": "YourPassword" // Optional
 }
 ```
 
-Code:
-
-```js
-const datalake = require('datalake');
-const dl = new datalake();
-dl.createConnection(postData).
-    then((response) => {
-        // do your logics here
-        // console.log('redis Connected');
-        // console.log('Redis db 0 selected');
-    }).
-    catch((err) => {
-        console.log(err);
-    });
-```
-
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **closeConnection**
 
@@ -114,42 +91,13 @@ dl.createConnection(postData).
 
 > This will close already created Redis connection pool if any.
 
-**Implementation**
-
-Code:
-
-```js
-const datalake = require('datalake');
-const dl = new datalake();
-
-dl.closeConnection();
-console.log('Connection closed');
-```
-
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **showStatus**
 
 `GET` : showStatus() → {JSON}
 
 > Returns the Status of Redis connection
-
-**Implementation**
-
-Code:
-
-```js
-const datalake = require('datalake');
-const dl = new datalake();
-dl.showStatus(postData).
-    then((response) => {
-        // do your logics here
-        console.log(response);
-    }).
-    catch((err) => {
-        console.log(err);
-    });
-```
 
 Response:
 
@@ -160,7 +108,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **SetupSearchHash**
 
@@ -168,238 +116,76 @@ Response:
 
 > Defining Redis Schema index keys
 
-**Implementation**
-
 Post Data:
 
 ```json
 {
     "ShortCodes": [
         {
-            "sc": "FirstName",
+            "sc": "Name",
             "type": "string"
         },
         {
-            "sc": "City",
+            "sc": "Email",
             "type": "string"
         },
         {
-            "sc": "Age",
+            "sc": "Phone",
             "type": "integer"
+        },
+        {
+            "sc": "Joined",
+            "type": "date"
+        },
+        {
+            "sc": "WorkLocation",
+            "type": "string",
+            "csv": "true"
         }
-    ]
+    ],
+    "Schema": "company",
+    "Keyword": "employee"
 }
 ```
 
-Code:
-
-```js
-const datalake = require('datalake');
-const dl = new datalake();
-dl.SetupSearchHash(postData).
-    then((response) => {
-        // do your logics here
-        console.log(response);
-    }).
-    catch((err) => {
-        console.log(err);
-    });
-```
-
-Response:
-
-```json
-{
-  "Status": "true",
-  "Message": "Success"
-}
-```
-
------------------------------------------
-
-### **InsertTidalPoolSchema**
-
-`POST` : InsertTidalPoolSchema() → {JSON}
-
-> This will Create new Schema
-
-**Implementation**
-
-Post Data:
-
-```json
-{
-    "VESShortCode": "Test"
-}
-```
-
-Code:
-
-```js
-const datalake = require('datalake');
-const dl = new datalake();
-dl.InsertTidalPoolSchema(postData).
-    then((response) => {
-        // do your logics here
-        console.log(response);
-    }).
-    catch((err) => {
-        console.log(err);
-    });
-```
-
-Response:
-
-```json
-{
-  "Status": "true",
-  "Message": "Success",
-  "insertId": "ced293b4-23d8-490f-8944-9495bad5b003"
-}
-```
-
------------------------------------------
-
-### **InsertTPData**
-
-`POST` : InsertTPData() → {JSON}
-
-> This will insert Key value pair against the Schema given
-
-**Implementation**
-
-Post Data:
-
-```json
-{
-  "Guid": "ced293b4-23d8-490f-8944-9495bad5b003",
-  "VESShortCode": "Test",
-  "Keyword": "Label",
-  "MetaData": "{ \"FirstName\": \"Aswin\",  \"City\": \"New York\", \"Age\": \"25\" }"
-}
-```
-
-Code:
-
-```js
-const datalake = require('datalake');
-const dl = new datalake();
-dl.InsertTPData(postData).
-    then((response) => {
-        // do your logics here
-        console.log(response);
-    }).
-    catch((err) => {
-        console.log(err);
-    });
-```
-
-Response:
-
-```json
-{
-  "Status": "true",
-  "Message": "Data Inserted Successfully",
-  "Guid": "ced293b4-23d8-490f-8944-9495bad5b003"
-}
-```
-
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **InsertData**
 
 `POST` : InsertData() → {JSON}
 
-> This will insert Key value pair against the Schema given, if Schema is not found, automatically will create new Schema and insert the key value pair against the newly created schema
-
-**Implementation**
+> This will insert Key value pair against the Schema given
 
 Post Data:
 
 ```json
 {
-  "VESShortCode": "Test",
-  "Keyword": "Label",
-  "MetaData": "{ \"FirstName\": \"Aswin\",  \"City\": \"New York\", \"Age\": \"25\" }"
+    "Guid": "ced293b4-23d8-490f-8944-9495bad5b003", // optional
+    "Schema": "company",
+    "Keyword": "employee",
+    "MetaData": "{ \"Name\": \"Aswin\",  \"Email\": \"aswin5010@gmail.com\", \"Age\": \"25\", \"Phone\": \"9876543210\", \"Joined\": \"06-March-2016\", \"WorkLocation\": [\"California\", \"India\"] }" // MetaData will be stringified json object.
 }
 ```
 
-Code:
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-```js
-const datalake = require('datalake');
-const dl = new datalake();
-dl.InsertData(postData).
-    then((response) => {
-        // do your logics here
-        console.log(response);
-    }).
-    catch((err) => {
-        console.log(err);
-    });
-```
+### **GetAllSchemaData**
 
-Response:
-
-```json
-{
-  "Status": "true",
-  "Message": "Data Inserted Successfully",
-  "Guid": "ff75a6fb-c80d-465b-8801-df70bfb7f6cb"
-}
-```
-
------------------------------------------
-
-### **GetTidalPoolSchema**
-
-`POST` : GetTidalPoolSchema() → {JSON}
+`POST` : GetAllSchemaData() → {JSON}
 
 > This will search records for given Keyword, Schema and returns all Key-value pair available in the schema. Result can be filtered with particular Guid
 
-**Implementation**
-
 Post Data:
 
 ```json
 {
-  "Keyword":"Label",
-  "VESShortCode":"Test"
+    "Guid": "ced293b4-23d8-490f-8944-9495bad5b003", // optional
+    "Schema": "companies",
+    "Keyword": "employee"
 }
 ```
 
-Code:
-
-```js
-const datalake = require('datalake');
-const dl = new datalake();
-dl.GetTidalPoolSchema(postData).
-    then((response) => {
-        // do your logics here
-        console.log(response);
-    }).
-    catch((err) => {
-        console.log(err);
-    });
-```
-
-Response:
-
-```json
-{
-  "Status": "true",
-  "Message": "Success",
-  "items": [
-    {
-      "Guid": "ced293b4-23d8-490f-8944-9495bad5b003",
-      "Keyword": "Label",
-      "VESData": "{ \"FirstName\": \"Aswin\",  \"City\": \"New York\", \"Age\": \"25\" }"
-    }
-  ]
-}
-```
-
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **SearchTidalPoolHash**
 
@@ -413,9 +199,11 @@ Post Data:
 
 ```json
 {
-    "FirstName": "Aswin",
-    "Keyword": "Label",
-    "VESShortCode":"Test"
+    "Schema":"companies",
+    "Keyword": "employee",
+    "Name": "Aswin",
+    "Email": "aswin5010@gmail.com",
+    "Joined": "6-March-2018"
 }
 ```
 
@@ -451,7 +239,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **GetDatafromSchemas**
 
@@ -504,7 +292,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **GetSchemaList**
 
@@ -541,7 +329,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **GetSearchHashSchema**
 
@@ -599,7 +387,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **GetTpSearchHash**
 
@@ -656,7 +444,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **SetKeyData**
 
@@ -701,7 +489,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **GetKeyData**
 
@@ -746,7 +534,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **RefreshTidalPoolData**
 
@@ -788,7 +576,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **UpdateTidalPoolHash**
 
@@ -831,7 +619,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **SnapshotTidalPoolData**
 
@@ -875,7 +663,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **RemoveTidalPoolData**
 
@@ -919,7 +707,7 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **RollbackTidalPoolData**
 
@@ -963,4 +751,4 @@ Response:
 }
 ```
 
------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

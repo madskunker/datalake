@@ -476,7 +476,8 @@ module.exports = class datalake {
                         }
                         return callback(null, retJSON);
                     });
-                } else {
+                } else if (err) {
+                    console.log('error getHash dataInsert(): ', err);
                     return callback(err);
                 }
                 if (response) {
@@ -979,7 +980,7 @@ module.exports = class datalake {
                                             var retObj = {};
                                             retObj.Guid = Guid;
                                             retObj.Keyword = Keyword;
-                                            retObj.VESData = res;
+                                            retObj.MetaData = res;
                                             items.push(retObj);
                                         }
                                         callback(null);
@@ -1004,7 +1005,7 @@ module.exports = class datalake {
                                                 var MetaData = res[keys[i]];
                                                 retObj.Guid = Guid;
                                                 retObj.Keyword = Keyword;
-                                                retObj.VESData = MetaData;
+                                                retObj.MetaData = MetaData;
                                                 items.push(retObj);
                                             }
                                         }
@@ -1802,12 +1803,12 @@ module.exports = class datalake {
                     async.forEachOf(GuidList, (Guid, i, callback) => {
                         this.getHash("Data:" + VESShortCode + ":" + Guid, Keyword, (err, res) => {
                             if (err) {
-                                console.log({ details: "GetAllSchemaData:getHash:Error", error: err });
+                                console.log({ details: "GetAllSchemaData:getHash:Error", error: err, Guid: Guid });
                             } else {
                                 var retObj = {};
                                 retObj.Guid = Guid;
                                 retObj.Keyword = Keyword;
-                                retObj.VESData = res;
+                                retObj.MetaData = res;
                                 if (items.length == 0) {
                                     if (items[VESShortCode]) {
                                         items[VESShortCode] = items[VESShortCode].concat(retObj);
@@ -1840,7 +1841,7 @@ module.exports = class datalake {
                                     var MetaData = res[keys[i]];
                                     retObj.Guid = Guid;
                                     retObj.Keyword = Keyword;
-                                    retObj.VESData = MetaData;
+                                    retObj.MetaData = MetaData;
                                     if (items.length == 0) {
                                         if (items[VESShortCode]) {
                                             items[VESShortCode] = items[VESShortCode].concat(retObj);
